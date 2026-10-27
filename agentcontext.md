@@ -46,7 +46,7 @@ Legend: ⬜ not started · 🟡 in progress · ✅ done
 
 | # | Phase | Status |
 |---|---|---|
-| 0 | Foundations: monorepo, Docker Compose (Postgres/Mongo/Redis), config, lint, CI skeleton | ⬜ |
+| 0 | Foundations: monorepo, Docker Compose (Postgres/Mongo/Redis), config, lint, CI skeleton | 🟡 backend skeleton done; frontend + CI pending; DB connectivity unverified |
 | 1 | Data & auth: schema finalized, Alembic, JWT auth, orgs/workspaces/RBAC | ⬜ |
 | 2 | LLM layer: provider interface, per-agent model config, usage/cost logging | ⬜ |
 | 3 | Knowledge/RAG: upload, chunk, embed, pgvector search, cited answers, chat in Mongo | ⬜ |
@@ -61,11 +61,10 @@ Legend: ⬜ not started · 🟡 in progress · ✅ done
 
 MVP = phases 0–7 (matches OVERVIEW "Initial Scope").
 
-**Current phase:** none started. Awaiting answers to the open questions below, then a Phase 0 breakdown for approval.
+**Current phase:** 0. Backend scaffold + frontend scaffold done (see session log). Remaining for Phase 0: CI skeleton, Docker/`/health/deps` verification (Docker daemon was down), `db-schema.mmd` creation.
 
 ## Open questions (unresolved)
-- Python package manager (uv recommended) and Python version.
-- Node version and package manager (npm/pnpm/yarn).
+- Python package manager (uv recommended) and Python version. *(uv +3.12 used for backend scaffold — confirm OK)*
 - File storage without S3: local volume in dev + Cloudflare R2 in prod?
 - Embedding model: local sentence-transformers vs OpenRouter.
 - LangGraph checkpointer in Postgres with `step_runs` as user-facing record (recommended) vs `step_runs` only.
@@ -80,10 +79,12 @@ MVP = phases 0–7 (matches OVERVIEW "Initial Scope").
 | 2026-10-27 | LangGraph for orchestration | User choice; Postgres tables stay the durable record |
 | 2026-10-27 | Form-based workflow editor first | Get engine working before React Flow canvas |
 | 2026-10-27 | Phase-by-phase with approval gates | User wants control over each implementation step |
+| 2026-10-27 | Node 24 LTS + npm for frontend | Installed on machine (no pnpm/yarn); simple for free PaaS deploy |
+| 2026-10-27 | Tailwind CSS for frontend styling | User choice; native create-next-app support, fast iteration |
 
 ## Repo layout
-Current: `OVERVIEW`, `db-schema.mmd`, `agentcontext.md`, empty skeleton dirs `backend/{app,alembic/versions,tests}/` and `frontend/` (`.gitkeep` only, no code).
-Planned (Phase 0): fill in `backend/` (pyproject, app package, Alembic), `frontend/` (Next.js), `docker-compose.yml`, `.env.example`, lint/CI skeleton. Note: `db-schema.mmd` is referenced but does not exist yet.
+Current: `OVERVIEW`, `agentcontext.md`, `docker-compose.yml`, root `.env.example`/`.gitignore`, `backend/` (uv project: `pyproject.toml`, `app/{config,main,api/health,db/*}`, `tests/`), `frontend/` (Next.js 16.4.3 + TS + Tailwind 4, App Router, `src/` dir: `app/{layout,page}.tsx`, `lib/api.ts`, `types/index.ts`, `.env.example`).
+Still missing: `db-schema.mmd` (referenced but never created), CI skeleton (`.github/workflows/`).
 
 ## Session log
 Append newest at the bottom. Format: `date · agent · files changed · what/why · next step`.
@@ -91,3 +92,5 @@ Append newest at the bottom. Format: `date · agent · files changed · what/why
 - 2026-10-27 · Claude Code · Reviewed OVERVIEW and schema, settled stack and 12-phase roadmap, created this file. Next: user answers open questions → Phase 0 breakdown for approval.
 - 2026-10-27 · Claude Code · Created empty directory skeleton (`backend/{app,alembic/versions,tests}/`, `frontend/`, `.gitkeep`s). Next: answer open questions → Phase 0 file-by-file breakdown for approval.
 - 2026-10-27 · Claude Code · agentcontext.md · Added mandatory rule that every agent logs all repo changes/decisions here (session log, status table, decisions, open questions, layout, setup notes) and reads recent log entries before starting. Next: user answers open questions → Phase 0 breakdown for approval.
+- 2026-10-27 · Claude Code · created `docker-compose.yml` (pgvector/pg16, mongo:7, redis:7 with healthchecks), `.env.example`, `.gitignore`, `backend/` uv project (Python 3.12 pinned; deps: fastapi, uvicorn, sqlalchemy[asyncio], asyncpg, alembic, pgvector, motor, redis, pydantic-settings; dev: pytest, pytest-asyncio, httpx, ruff), `backend/app/{config,main}.py`, `app/db/{postgres,mongo,redis}.py`, `app/api/health.py` (`/health`, `/health/deps`), `tests/test_health.py`, ruff+pytest config. Used defaults for open questions: uv, Python 3.12. `ruff` and `pytest` pass. NOT verified: `/health/deps` against real DBs (Docker daemon was not running). Noticed `db-schema.mmd` missing from disk. Next: start Docker, run `docker compose up -d`, `cd backend && uv run uvicorn app.main:app --reload`, check `/health/deps`; then Phase 1 breakdown for approval.
+- 2026-10-27 · OpenCode (MiMo) · frontend scaffold for Phase 0 (user-approved breakdown): `create-next-app` (Next.js 16.4.3, TS, ESLint, Tailwind 4, App Router, `src/`, npm, no nested git), `src/app/layout.tsx` (metadata → "AI Workbench"), `src/app/page.tsx` (landing shell), `frontend/.env.example` (`NEXT_PUBLIC_API_URL`), `src/lib/api.ts` (typed fetch client stub), `src/types/index.ts` (placeholder User/Workspace/Workflow/WorkflowRun), `frontend/.gitignore` (`!.env.example` exception), this file (layout/status/decisions/open-questions). Read bundled Next 16 docs per `AGENTS.md` before writing code. `npm run lint` + `npm run build` pass. Open question resolved: Node 24 + npm. Next: CI skeleton + Docker verification to finish Phase 0, then Phase 1 breakdown for approval.
