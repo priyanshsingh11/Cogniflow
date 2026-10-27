@@ -6,8 +6,14 @@ Shared context for any coding agent (Claude Code, Cursor, Copilot, etc.) working
 1. **Phase-gated:** implement one phase at a time. Do not start a phase without explicit user approval of its file-by-file breakdown.
 2. **Plan before code:** propose changes, get approval, then implement.
 3. **Do not commit or push** unless the user asks.
-4. Keep this file current: update *Status*, *Decisions*, *Open questions* and *Session log* whenever something changes.
-5. Match existing code style; don't add features outside the current phase.
+4. **Every change must be recorded here (mandatory).** Whenever an agent changes anything in the repo (code, config, schema, docs, dependencies, infra) or makes a decision, it must update this file in the same session, before finishing:
+   - Add a *Session log* entry: date, agent name, files created/modified/deleted, what and why, and what's next.
+   - Update the *Roadmap and status* table and *Current phase* if progress changed.
+   - Update *Decisions log*, *Open questions*, *Tech stack*, *Data ownership rules* and *Repo layout* if they are affected.
+   - Note any new commands, env vars, or setup steps another agent needs to know.
+   - If you changed nothing, don't log anything. If a change is not recorded here, treat it as incomplete.
+5. Before starting work, read the latest *Session log* entries so you don't redo or contradict earlier work.
+6. Match existing code style; don't add features outside the current phase.
 
 ## Project summary
 Multi-tenant platform to build, run and monitor AI workflows: document RAG with citations, configurable agents, MCP tool integration, human approval steps, execution history/observability, and evaluation. Portfolio project, 2–3 months part-time. Full description: [OVERVIEW](OVERVIEW). Data model: [db-schema.mmd](db-schema.mmd). Approved roadmap: `~/.claude/plans/so-now-start-from-enchanted-rabin.md`.
@@ -76,10 +82,12 @@ MVP = phases 0–7 (matches OVERVIEW "Initial Scope").
 | 2026-10-27 | Phase-by-phase with approval gates | User wants control over each implementation step |
 
 ## Repo layout
-Current: `OVERVIEW`, `db-schema.mmd`, `agentcontext.md` (no code yet).
-Planned (Phase 0): `backend/`, `frontend/`, `docker-compose.yml`, `.env.example`.
+Current: `OVERVIEW`, `db-schema.mmd`, `agentcontext.md`, empty skeleton dirs `backend/{app,alembic/versions,tests}/` and `frontend/` (`.gitkeep` only, no code).
+Planned (Phase 0): fill in `backend/` (pyproject, app package, Alembic), `frontend/` (Next.js), `docker-compose.yml`, `.env.example`, lint/CI skeleton. Note: `db-schema.mmd` is referenced but does not exist yet.
 
 ## Session log
-Append newest at the bottom: date, agent, what changed, what's next.
+Append newest at the bottom. Format: `date · agent · files changed · what/why · next step`.
 
 - 2026-10-27 · Claude Code · Reviewed OVERVIEW and schema, settled stack and 12-phase roadmap, created this file. Next: user answers open questions → Phase 0 breakdown for approval.
+- 2026-10-27 · Claude Code · Created empty directory skeleton (`backend/{app,alembic/versions,tests}/`, `frontend/`, `.gitkeep`s). Next: answer open questions → Phase 0 file-by-file breakdown for approval.
+- 2026-10-27 · Claude Code · agentcontext.md · Added mandatory rule that every agent logs all repo changes/decisions here (session log, status table, decisions, open questions, layout, setup notes) and reads recent log entries before starting. Next: user answers open questions → Phase 0 breakdown for approval.
