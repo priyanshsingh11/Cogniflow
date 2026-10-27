@@ -1,0 +1,44 @@
+AI Workbench — Multi-Agent AI Automation Platform
+What Is This Project?
+AI Workbench is a full-stack SaaS platform that lets individuals and teams create, connect, run, and monitor AI-powered workflows. Users can combine AI agents, company documents, and external tools to automate multi-step tasks from a single workspace.
+
+Instead of being just a chatbot, AI Workbench helps users define a process—such as gathering information, analyzing it, generating a report, and requesting approval—and then executes that process while recording its progress and results.
+How It Works
+1. A user creates a workspace and configures a workflow for a task.
+2. The user can add steps such as an AI model call, document search, a condition, an external tool call, or a human approval.
+3. The workflow engine executes the steps in the configured order and passes relevant results between them.
+4. When useful, multiple specialized AI agents collaborate under a coordinating agent or workflow.
+5. The platform stores execution status, outputs, errors, and usage information so the user can inspect what happened.
+For example, a user could create a workflow that retrieves open GitHub issues, searches internal documentation, summarizes important problems, and prepares a report for review.
+The Role of MCP
+AI Workbench will support the Model Context Protocol (MCP) so workflows and agents can connect to external tools and information through compatible MCP servers.
+
+The platform will include an MCP integration layer that can connect to configured servers, discover their available tools, validate tool inputs, and invoke permitted tools during workflow execution. Possible integrations include GitHub, databases, document systems, and other services that expose suitable MCP servers.
+
+MCP is the connection protocol; it does not itself provide the AI model, decide the entire workflow, or grant automatic access to external accounts. Connections require appropriate configuration, credentials, and permissions.
+Main Capabilities
+- Workspace and team management: Accounts, organizations, projects, roles, and isolated tenant data.
+- Knowledge and RAG: Upload documents, process and index their content, retrieve relevant passages, and generate answers with source citations.
+- Visual workflow builder: Create workflows by connecting nodes such as triggers, AI calls, tool calls, conditions, and approval steps.
+- AI agents: Configure agents for tasks such as research, analysis, writing, and reviewing.
+- MCP integrations: Connect to supported MCP servers and expose approved tools to selected workflows.
+- Workflow execution: Run jobs asynchronously, track state, handle errors, support timeouts and retries, and resume eligible workflows.
+- Human approval and safety: Require review before sensitive or consequential actions; enforce permissions and tool restrictions.
+- Execution history and observability: Inspect workflow steps, tool calls, outcomes, failures, latency, token usage, and estimated cost.
+- Evaluation: Test AI outputs and workflows against known examples to measure quality and catch regressions.
+- Production foundations: Automated tests, secure credential handling, audit logs, rate limits, CI/CD, and deployment.
+What Makes It a Software Engineering Project?
+The goal is not merely to call an LLM API or build a polished dashboard. AI Workbench should demonstrate full-stack and backend engineering through secure multi-tenancy, API design, database modeling, asynchronous jobs, concurrency, durable workflow state, failure recovery, testing, monitoring, and deployment.
+
+The platform should be designed so that external tool failures, model errors, duplicate events, and interrupted workers are handled deliberately rather than causing the entire application to fail.
+Initial Scope
+Start with a small end-to-end version:
+1. Users can sign in and create a workspace.
+2. Users can upload a document and ask questions with source-grounded answers.
+3. Users can create and run a simple multi-step workflow.
+4. The workflow can call one configured MCP server and use one of its approved tools.
+5. Each execution has a status, step history, outputs, and error details.
+6. Sensitive actions can pause for human approval.
+Once this foundation works reliably, expand to a visual workflow editor, multiple collaborating agents, additional MCP servers, scheduled triggers, richer evaluation, and production observability.
+Product Vision
+AI Workbench is a secure, extensible platform for building and operating AI-powered workflows. It combines multi-agent orchestration, document-based knowledge, MCP-powered external tool access, human oversight, and production-grade execution monitoring in one full-stack application.
