@@ -1,19 +1,34 @@
-/**
- * Placeholder shared types.
- * These will be refined against the actual backend schema in Phase 1
- * (see db-schema.mmd once created).
- */
+/** Shared types mirroring the backend Pydantic schemas (Phase 1 auth/tenancy). */
 
 export interface User {
   id: string;
   email: string;
+  display_name: string;
+  created_at: string;
+}
+
+export type Role = "owner" | "admin" | "member" | "viewer";
+
+export interface Organization {
+  id: string;
   name: string;
+  slug: string;
+  role: Role | null;
+  created_at: string;
 }
 
 export interface Workspace {
   id: string;
-  organizationId: string;
+  org_id: string;
   name: string;
+  role: Role | null;
+  created_at: string;
+}
+
+export interface TokenResponse {
+  access_token: string;
+  token_type: "bearer";
+  user: User;
 }
 
 export type RunStatus =

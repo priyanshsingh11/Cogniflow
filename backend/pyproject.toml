@@ -5,10 +5,13 @@ requires-python = ">=3.12"
 dependencies = [
     "alembic>=1.20.1",
     "asyncpg>=0.32.0",
+    "bcrypt>=5.0.0",
+    "email-validator>=2.3.0",
     "fastapi>=0.162.0",
     "motor>=3.7.1",
     "pgvector>=0.5.1",
     "pydantic-settings>=2.16.1",
+    "pyjwt>=2.15.1",
     "redis>=8.1.0",
     "sqlalchemy[asyncio]>=2.1.6",
     "uvicorn[standard]>=0.54.0",
@@ -27,6 +30,21 @@ line-length = 100
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI's dependency-injection pattern uses Depends()/Query()/etc. in
+# argument defaults; this is idiomatic, not a bug.
+extend-immutable-calls = [
+    "fastapi.Depends",
+    "fastapi.Query",
+    "fastapi.Path",
+    "fastapi.Header",
+    "fastapi.Cookie",
+    "fastapi.Body",
+    "fastapi.Form",
+    "fastapi.File",
+    "fastapi.Security",
+]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

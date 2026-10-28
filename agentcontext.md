@@ -47,7 +47,7 @@ Legend: ⬜ not started · 🟡 in progress · ✅ done
 | # | Phase | Status |
 |---|---|---|
 | 0 | Foundations: monorepo, Docker Compose (Postgres/Mongo/Redis), config, lint, CI skeleton | ✅ |
-| 1 | Data & auth: schema finalized, Alembic, JWT auth, orgs/workspaces/RBAC | ⬜ |
+| 1 | Data & auth: schema finalized, Alembic, JWT auth, orgs/workspaces/RBAC | ✅ |
 | 2 | LLM layer: provider interface, per-agent model config, usage/cost logging | ⬜ |
 | 3 | Knowledge/RAG: upload, chunk, embed, pgvector search, cited answers, chat in Mongo | ⬜ |
 | 4 | MCP layer: register servers, discover/validate/invoke tools, TOOL_CALLS logging | ⬜ |
@@ -61,7 +61,13 @@ Legend: ⬜ not started · 🟡 in progress · ✅ done
 
 MVP = phases 0–7 (matches OVERVIEW "Initial Scope").
 
-**Current phase:** 0 complete; Phase 1 next. (old note:) Backend scaffold + frontend scaffold done (see session log). Remaining for Phase 0: CI skeleton, Docker/`/health/deps` verification (Docker daemon was down), `db-schema.mmd` creation.
+**Current phase:** 0 and 1 complete; Phase 2 (LLM layer) next — needs its own approval gate. Phase 1 delivered: SQLAlchemy models (users/organizations/memberships/workspaces), Alembic migration `0001_initial_auth` (pgvector extension + 4 tables), JWT signup/login/me with bcrypt + PyJWT, tenant/RBAC dependencies (`get_current_user`, `require_workspace`, `require_role`, org-level `_require_org_role`), API routes `/auth/*`, `/organizations/*` (incl. members + workspaces), `/workspaces/*`, frontend `/login`, `/signup`, `/dashboard` (token in localStorage), 21 tests (auth + tenant isolation + role enforcement) against a real `cogniflow_test` Postgres DB running the actual migration.
+
+### Phase 1 API surface (for later phases)
+- `POST /auth/signup` (201 → token; creates user + personal org + "Default" workspace + owner membership), `POST /auth/login`, `GET /auth/me`.
+- `GET/POST /organizations`, `GET/POST /organizations/{id}/members`, `GET/POST /organizations/{id}/workspaces`, `GET /workspaces/{id}`, `DELETE /workspaces/{id}` (admin+), `POST /workspaces/{id}/rename` (member+).
+- Tenancy pattern: routes depend on `require_workspace` / `require_role(Role.X)` from `app/api/deps.py` and receive a `TenantContext` (user, workspace, org, membership, role). Non-members get 404 (existence never leaks), insufficient role gets 403.
+- Role rules: owner > admin > member > viewer (org membership decides workspace access). Adding members: admin+ may only grant roles strictly below their own; only owners can grant admin; nobody can grant owner via API.
 
 ## Open questions (unresolved)
 - Python package manager (uv recommended) and Python version. *(uv +3.12 used for backend scaffold — confirm OK)*
@@ -81,10 +87,25 @@ MVP = phases 0–7 (matches OVERVIEW "Initial Scope").
 | 2026-10-27 | Phase-by-phase with approval gates | User wants control over each implementation step |
 | 2026-10-27 | Node 24 LTS + npm for frontend | Installed on machine (no pnpm/yarn); simple for free PaaS deploy |
 | 2026-10-27 | Tailwind CSS for frontend styling | User choice; native create-next-app support, fast iteration |
+| 2026-10-28 | bcrypt directly (not passlib[bcrypt]) | passlib is unmaintained and breaks with bcrypt>=4.1 |
+| 2026-10-28 | JWT in frontend localStorage (not httpOnly cookie) | Simplest for a portfolio project; revisit before untrusted deployments |
+| 2026-10-28 | Tests run real Alembic migration against docker Postgres `cogniflow_test` (not SQLite) | Validates pgvector extension + migration itself; sqlite would hide Postgres-specific breakage |
+| 2026-10-28 | Signup = user + personal org + "Default" workspace + owner membership | Users can use the app immediately; POST /organizations still exists for more orgs |
+| 2026-10-28 | Non-members get 404 (not 403) on org/workspace resources | Don't leak existence of other tenants' resources |
+| 2026-10-28 | Member grants: strictly below own rank; only owners grant admin; nobody grants owner via API | Prevents privilege escalation by admins |
+| 2026-10-28 | JWT_SECRET must be >= 32 bytes (HS256, RFC 7518) | pyjwt warns on short keys; dev default padded accordingly |
 
 ## Repo layout
-Current: `OVERVIEW`, `agentcontext.md`, `docker-compose.yml`, root `.env.example`/`.gitignore`, `backend/` (uv project: `pyproject.toml`, `app/{config,main,api/health,db/*}`, `tests/`), `frontend/` (Next.js 16.4.3 + TS + Tailwind 4, App Router, `src/` dir: `app/{layout,page}.tsx`, `lib/api.ts`, `types/index.ts`, `.env.example`).
-Also: `db-schema.mmd` (Phase 1 blueprint, recreated), `.github/workflows/ci.yml`, `frontend/src/app/deps-status.tsx`.
+Current: `OVERVIEW`, `agentcontext.md`, `docker-compose.yml`, root `.env.example`/`.gitignore`, `backend/` (uv project: `pyproject.toml`, `alembic.ini`, `alembic/{env.py,script.py.mako,versions/0001_initial_auth.py}`, `app/{config,main}.py`, `app/core/security.py`, `app/models/{base,enums,user,organization,workspace}.py`, `app/schemas/{auth,org}.py`, `app/api/{health,auth,organizations,workspaces,deps}.py`, `app/db/{postgres,mongo,redis}.py`, `tests/{conftest,test_health,test_auth,test_tenancy}.py`), `frontend/` (Next.js 16.4.3 + TS + Tailwind 4, App Router, `src/` dir: `app/{layout,page,deps-status,login,signup,dashboard}`, `lib/{api,auth}.ts`, `types/index.ts`, `.env.example`).
+Also: `db-schema.mmd` (Phase 1 blueprint), `.github/workflows/ci.yml` (backend job now has a pgvector Postgres service container).
+
+### Commands / setup notes for other agents
+- Backend dev server: `cd backend && uv run uvicorn app.main:app --reload --port 8001` (8000 is taken by another app on this machine).
+- Migrations: `cd backend && uv run alembic upgrade head` (needs `docker compose up -d`). Env.py adds backend/ to sys.path itself.
+- Tests: `cd backend && uv run pytest` — requires docker Postgres up; conftest creates/migrates `cogniflow_test` and truncates tables per test. Never point tests at the dev `cogniflow` DB.
+- New env vars (both `.env.example` and `backend/.env` updated): `JWT_SECRET` (>= 32 bytes for HS256), `JWT_EXPIRE_MINUTES` (default 1440).
+- New deps: `pyjwt`, `bcrypt`, `email-validator` (backend); ruff config now sets `extend-immutable-calls` for FastAPI's `Depends()` pattern.
+- Frontend: `cd frontend && npm run dev` (http://localhost:3000). Token lives in localStorage (`cogniflow_token`/`cogniflow_user`); `lib/api.ts` attaches the Bearer header and clears the token on 401.
 
 ## Session log
 Append newest at the bottom. Format: `date · agent · files changed · what/why · next step`.
@@ -97,3 +118,5 @@ Append newest at the bottom. Format: `date · agent · files changed · what/why
 - 2026-10-27 · Claude Code · agentcontext.md · Verified: `docker compose up -d` healthy; backend `/health` and `/health/deps` return ok for postgres/mongo/redis. Port 8000 is used by the user's other project (cold-call-assistant), so run Cogniflow with `uv run uvicorn app.main:app --reload --port 8001`. Mistake: a `pkill -f "uvicorn app.main"` I ran likely stopped that other app; do not use broad pkill, kill only your own PID. Next: frontend scaffold (awaiting npm/pnpm + Tailwind confirmation) and Phase 1 breakdown.
 - 2026-10-27 · Claude Code · frontend/.env.example, frontend/.env.local · Changed NEXT_PUBLIC_API_URL to http://localhost:8001 (8000 is the user's other app); created git-ignored .env.local. A duplicate nested `frontend/frontend/` (from running create-next-app inside frontend/) had already been removed. Run: backend `uv run uvicorn app.main:app --reload --port 8001`, frontend `cd frontend && npm run dev` (http://localhost:3000). Next: verify landing page reaches API; Phase 1 breakdown.
 - 2026-10-28 · Claude Code · `backend/app/{config,main}.py` (CORS middleware, `CORS_ORIGINS` setting defaulting to `http://localhost:3000`), `backend/tests/test_health.py` (CORS test), `.github/workflows/ci.yml` (backend: uv sync, ruff, pytest; frontend: npm ci, lint, build), `frontend/src/app/{deps-status.tsx,page.tsx}` (landing page shows `/health/deps`), `db-schema.mmd` recreated from OVERVIEW/agentcontext incl. CONVERSATIONS, `WORKFLOW_RUNS.conversation_id`/`idempotency_key`/`queue_job_id`, `STEP_RUNS.trace_ref`/`idempotency_key`, `DOCUMENTS.content_hash`. Verified: ruff+pytest (2 pass), frontend lint+build, both apps run, curl shows CORS header and all deps ok. CI not yet run on GitHub. Phase 0 done. Next: Phase 1 breakdown (finalize schema, Alembic, JWT auth, orgs/RBAC).
+- 2026-10-28 · OpenCode (MiMo) · Phase 1 approved file-by-file breakdown (user chose all recommended options): bcrypt directly (not passlib), JWT in frontend localStorage (not httpOnly cookie), tests run against real Postgres `cogniflow_test` DB with the actual Alembic migration (not SQLite), signup creates user + personal org + "Default" workspace + owner membership. agentcontext.md updated (Phase 1 → 🟡).
+- 2026-10-28 · OpenCode (MiMo) · **Phase 1 implemented and verified.** Backend: `app/models/{base,enums,user,organization,workspace,__init__}.py` (User/Organization/Membership/Workspace, UUID pks, Role StrEnum with rank()); `app/core/security.py` (bcrypt hash/verify, PyJWT create/decode with sub=uuid, exp); `app/config.py` + root/.env `JWT_SECRET` (>=32 bytes, HS256 warning), `JWT_EXPIRE_MINUTES`; `alembic.ini` + `alembic/env.py` (async, adds backend/ to sys.path) + `alembic/versions/0001_initial_auth.py` (CREATE EXTENSION vector + users/organizations/memberships/workspaces w/ FKs, unique email/slug/user+org, indexes) — applied to dev DB; `app/schemas/{auth,org}.py`; `app/api/deps.py` (`get_current_user` via HTTPBearer, `require_workspace`→TenantContext, `require_role(min)` factory; non-members → 404 to avoid leaking existence); `app/api/auth.py` (signup 201/login/me), `app/api/organizations.py` (list/create orgs, members list/add w/ "grant strictly below own rank" rule, workspaces list/create), `app/api/workspaces.py` (get/delete-admin/rename-member — the tenant pattern for later phases); `app/main.py` wires routers; pyproject adds pyjwt/bcrypt/email-validator + ruff `extend-immutable-calls` for Depends(). Frontend: `types/index.ts` (real User/Org/Workspace/Role/TokenResponse), `lib/auth.ts` (localStorage token+user helpers), `lib/api.ts` (auto Bearer header, clear-on-401, auth API fns), `app/login/page.tsx` + `app/signup/page.tsx` (client forms → store token → /dashboard), `app/dashboard/page.tsx` (fetch me + orgs + workspaces, logout), landing page nav links to login/signup (read bundled Next 16 docs first per AGENTS.md). Tests: `tests/conftest.py` (creates+migrates `cogniflow_test` via real alembic upgrade, truncates per test, engine.dispose() to avoid cross-loop pooling), `test_auth.py` (10 tests), `test_tenancy.py` (11 tests incl. cross-tenant 404s, viewer/member/admin/owner role gates, privilege-escalation prevention). CI: added pgvector Postgres service to backend job. Verified: ruff clean, 21/21 pytest pass, frontend lint+build pass, manual curl smoke test of signup→login→me→orgs→workspace get/rename + cross-user 404. Fixed during work: SQLAlchemy text() for TRUNCATE, admin-could-grant-admin bug (rule tightened to >=), short JWT key warning, lint B008/E501/I001. Not committed (per rules). Next: Phase 2 (LLM layer) breakdown for approval.
