@@ -1,0 +1,231 @@
+%% Cogniflow — Postgres system-of-record schema (Phase 1 blueprint).
+%% Mongo holds messages, agent_memory, step_traces and references Postgres UUIDs; never the reverse.
+%% Planned additions vs. the original schema are marked [NEW].
+erDiagram
+    USERS ||--o{ MEMBERSHIPS : has
+    ORGANIZATIONS ||--o{ MEMBERSHIPS : has
+    ORGANIZATIONS ||--o{ WORKSPACES : owns
+    WORKSPACES ||--o{ DOCUMENTS : contains
+    DOCUMENTS ||--o{ DOCUMENT_CHUNKS : split_into
+    WORKSPACES ||--o{ AGENTS : configures
+    WORKSPACES ||--o{ MCP_SERVERS : registers
+    MCP_SERVERS ||--o{ MCP_TOOLS : exposes
+    WORKSPACES ||--o{ CONVERSATIONS : has
+    USERS ||--o{ CONVERSATIONS : starts
+    WORKSPACES ||--o{ WORKFLOWS : defines
+    WORKFLOWS ||--o{ WORKFLOW_VERSIONS : versioned_as
+    WORKFLOW_VERSIONS ||--o{ WORKFLOW_STEPS : contains
+    WORKFLOW_VERSIONS ||--o{ WORKFLOW_RUNS : executed_as
+    CONVERSATIONS |o--o{ WORKFLOW_RUNS : triggers
+    WORKFLOW_RUNS ||--o{ STEP_RUNS : has
+    WORKFLOW_STEPS ||--o{ STEP_RUNS : instantiated_as
+    STEP_RUNS ||--o{ TOOL_CALLS : makes
+    MCP_TOOLS ||--o{ TOOL_CALLS : invoked_by
+    STEP_RUNS ||--o{ LLM_CALLS : makes
+    AGENTS ||--o{ WORKFLOW_STEPS : runs
+    STEP_RUNS ||--o{ APPROVALS : requests
+    USERS |o--o{ APPROVALS : decides
+    WORKSPACES ||--o{ AUDIT_LOGS : records
+    WORKSPACES ||--o{ EVAL_DATASETS : owns
+    EVAL_DATASETS ||--o{ EVAL_CASES : contains
+    EVAL_DATASETS ||--o{ EVAL_RUNS : evaluated_in
+    EVAL_RUNS ||--o{ EVAL_RESULTS : produces
+    EVAL_CASES ||--o{ EVAL_RESULTS : scored_in
+
+    USERS {
+        uuid id PK
+        string email UK
+        string password_hash
+        string display_name
+        timestamptz created_at
+    }
+    ORGANIZATIONS {
+        uuid id PK
+        string name
+        string slug UK
+        timestamptz created_at
+    }
+    MEMBERSHIPS {
+        uuid id PK
+        uuid user_id FK
+        uuid org_id FK
+        string role "owner|admin|member|viewer"
+        timestamptz created_at
+    }
+    WORKSPACES {
+        uuid id PK
+        uuid org_id FK
+        string name
+        timestamptz created_at
+    }
+    DOCUMENTS {
+        uuid id PK
+        uuid workspace_id FK
+        string filename
+        string storage_path
+        string content_hash "dedupe within workspace [NEW]"
+        string status "pending|processing|ready|failed"
+        timestamptz created_at
+    }
+    DOCUMENT_CHUNKS {
+        uuid id PK
+        uuid document_id FK
+        uuid workspace_id FK "denormalized for tenant filter"
+        int chunk_index
+        text content
+        vector embedding "pgvector"
+        int token_count
+    }
+    AGENTS {
+        uuid id PK
+        uuid workspace_id FK
+        string name
+        text system_prompt
+        string provider
+        string model
+        jsonb params
+        timestamptz created_at
+    }
+    MCP_SERVERS {
+        uuid id PK
+        uuid workspace_id FK
+        string name
+        string transport
+        string url_or_command
+        string secret_ref "encrypted credential reference"
+        string status
+    }
+    MCP_TOOLS {
+        uuid id PK
+        uuid mcp_server_id FK
+        string name
+        jsonb input_schema
+        bool approved "allow-listed for workflows"
+        bool requires_approval
+    }
+    CONVERSATIONS {
+        uuid id PK "[NEW]"
+        uuid workspace_id FK
+        uuid user_id FK
+        string title
+        string mongo_conversation_id "ref to Mongo messages [NEW]"
+        string status "pending|active|archived"
+        timestamptz created_at
+    }
+    WORKFLOWS {
+        uuid id PK
+        uuid workspace_id FK
+        string name
+        uuid current_version_id FK
+        timestamptz created_at
+    }
+    WORKFLOW_VERSIONS {
+        uuid id PK
+        uuid workflow_id FK
+        int version
+        jsonb graph "ordered steps + edges"
+        timestamptz created_at
+    }
+    WORKFLOW_STEPS {
+        uuid id PK
+        uuid workflow_version_id FK
+        int position
+        string type "llm|retrieve|condition|tool|approval"
+        uuid agent_id FK
+        jsonb config
+    }
+    WORKFLOW_RUNS {
+        uuid id PK
+        uuid workflow_version_id FK
+        uuid workspace_id FK
+        uuid conversation_id FK "optional [NEW]"
+        uuid triggered_by FK
+        string status "queued|running|waiting_approval|succeeded|failed|cancelled"
+        string idempotency_key UK "dedupe duplicate triggers/jobs [NEW]"
+        string queue_job_id "arq job id [NEW]"
+        jsonb input
+        jsonb output
+        text error
+        timestamptz started_at
+        timestamptz finished_at
+    }
+    STEP_RUNS {
+        uuid id PK
+        uuid workflow_run_id FK
+        uuid workflow_step_id FK
+        int attempt
+        string status "pending|running|succeeded|failed|skipped"
+        string idempotency_key UK "workflow_run_id + step + attempt [NEW]"
+        string trace_ref "Mongo step_traces _id [NEW]"
+        jsonb input
+        jsonb output
+        text error
+        timestamptz started_at
+        timestamptz finished_at
+    }
+    TOOL_CALLS {
+        uuid id PK
+        uuid step_run_id FK
+        uuid mcp_tool_id FK
+        jsonb arguments
+        jsonb result
+        string status
+        int latency_ms
+        timestamptz created_at
+    }
+    LLM_CALLS {
+        uuid id PK
+        uuid step_run_id FK
+        string provider
+        string model
+        int prompt_tokens
+        int completion_tokens
+        numeric cost_usd
+        int latency_ms
+        timestamptz created_at
+    }
+    APPROVALS {
+        uuid id PK
+        uuid step_run_id FK
+        uuid decided_by FK
+        string status "pending|approved|rejected|expired"
+        text reason
+        timestamptz requested_at
+        timestamptz decided_at
+    }
+    AUDIT_LOGS {
+        uuid id PK
+        uuid workspace_id FK
+        uuid actor_id FK
+        string action
+        string entity_type
+        uuid entity_id
+        jsonb metadata
+        timestamptz created_at
+    }
+    EVAL_DATASETS {
+        uuid id PK
+        uuid workspace_id FK
+        string name
+    }
+    EVAL_CASES {
+        uuid id PK
+        uuid dataset_id FK
+        jsonb input
+        jsonb expected
+    }
+    EVAL_RUNS {
+        uuid id PK
+        uuid dataset_id FK
+        uuid workflow_version_id FK
+        string status
+        timestamptz created_at
+    }
+    EVAL_RESULTS {
+        uuid id PK
+        uuid eval_run_id FK
+        uuid eval_case_id FK
+        jsonb actual
+        float score
+        bool passed
+    }

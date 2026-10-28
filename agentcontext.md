@@ -46,7 +46,7 @@ Legend: ⬜ not started · 🟡 in progress · ✅ done
 
 | # | Phase | Status |
 |---|---|---|
-| 0 | Foundations: monorepo, Docker Compose (Postgres/Mongo/Redis), config, lint, CI skeleton | 🟡 backend skeleton done; frontend + CI pending; DB connectivity verified |
+| 0 | Foundations: monorepo, Docker Compose (Postgres/Mongo/Redis), config, lint, CI skeleton | ✅ |
 | 1 | Data & auth: schema finalized, Alembic, JWT auth, orgs/workspaces/RBAC | ⬜ |
 | 2 | LLM layer: provider interface, per-agent model config, usage/cost logging | ⬜ |
 | 3 | Knowledge/RAG: upload, chunk, embed, pgvector search, cited answers, chat in Mongo | ⬜ |
@@ -61,7 +61,7 @@ Legend: ⬜ not started · 🟡 in progress · ✅ done
 
 MVP = phases 0–7 (matches OVERVIEW "Initial Scope").
 
-**Current phase:** 0. Backend scaffold + frontend scaffold done (see session log). Remaining for Phase 0: CI skeleton, Docker/`/health/deps` verification (Docker daemon was down), `db-schema.mmd` creation.
+**Current phase:** 0 complete; Phase 1 next. (old note:) Backend scaffold + frontend scaffold done (see session log). Remaining for Phase 0: CI skeleton, Docker/`/health/deps` verification (Docker daemon was down), `db-schema.mmd` creation.
 
 ## Open questions (unresolved)
 - Python package manager (uv recommended) and Python version. *(uv +3.12 used for backend scaffold — confirm OK)*
@@ -84,7 +84,7 @@ MVP = phases 0–7 (matches OVERVIEW "Initial Scope").
 
 ## Repo layout
 Current: `OVERVIEW`, `agentcontext.md`, `docker-compose.yml`, root `.env.example`/`.gitignore`, `backend/` (uv project: `pyproject.toml`, `app/{config,main,api/health,db/*}`, `tests/`), `frontend/` (Next.js 16.4.3 + TS + Tailwind 4, App Router, `src/` dir: `app/{layout,page}.tsx`, `lib/api.ts`, `types/index.ts`, `.env.example`).
-Still missing: `db-schema.mmd` (referenced but never created), CI skeleton (`.github/workflows/`).
+Also: `db-schema.mmd` (Phase 1 blueprint, recreated), `.github/workflows/ci.yml`, `frontend/src/app/deps-status.tsx`.
 
 ## Session log
 Append newest at the bottom. Format: `date · agent · files changed · what/why · next step`.
@@ -96,3 +96,4 @@ Append newest at the bottom. Format: `date · agent · files changed · what/why
 - 2026-10-27 · OpenCode (MiMo) · frontend scaffold for Phase 0 (user-approved breakdown): `create-next-app` (Next.js 16.4.3, TS, ESLint, Tailwind 4, App Router, `src/`, npm, no nested git), `src/app/layout.tsx` (metadata → "AI Workbench"), `src/app/page.tsx` (landing shell), `frontend/.env.example` (`NEXT_PUBLIC_API_URL`), `src/lib/api.ts` (typed fetch client stub), `src/types/index.ts` (placeholder User/Workspace/Workflow/WorkflowRun), `frontend/.gitignore` (`!.env.example` exception), this file (layout/status/decisions/open-questions). Read bundled Next 16 docs per `AGENTS.md` before writing code. `npm run lint` + `npm run build` pass. Open question resolved: Node 24 + npm. Next: CI skeleton + Docker verification to finish Phase 0, then Phase 1 breakdown for approval.
 - 2026-10-27 · Claude Code · agentcontext.md · Verified: `docker compose up -d` healthy; backend `/health` and `/health/deps` return ok for postgres/mongo/redis. Port 8000 is used by the user's other project (cold-call-assistant), so run Cogniflow with `uv run uvicorn app.main:app --reload --port 8001`. Mistake: a `pkill -f "uvicorn app.main"` I ran likely stopped that other app; do not use broad pkill, kill only your own PID. Next: frontend scaffold (awaiting npm/pnpm + Tailwind confirmation) and Phase 1 breakdown.
 - 2026-10-27 · Claude Code · frontend/.env.example, frontend/.env.local · Changed NEXT_PUBLIC_API_URL to http://localhost:8001 (8000 is the user's other app); created git-ignored .env.local. A duplicate nested `frontend/frontend/` (from running create-next-app inside frontend/) had already been removed. Run: backend `uv run uvicorn app.main:app --reload --port 8001`, frontend `cd frontend && npm run dev` (http://localhost:3000). Next: verify landing page reaches API; Phase 1 breakdown.
+- 2026-10-28 · Claude Code · `backend/app/{config,main}.py` (CORS middleware, `CORS_ORIGINS` setting defaulting to `http://localhost:3000`), `backend/tests/test_health.py` (CORS test), `.github/workflows/ci.yml` (backend: uv sync, ruff, pytest; frontend: npm ci, lint, build), `frontend/src/app/{deps-status.tsx,page.tsx}` (landing page shows `/health/deps`), `db-schema.mmd` recreated from OVERVIEW/agentcontext incl. CONVERSATIONS, `WORKFLOW_RUNS.conversation_id`/`idempotency_key`/`queue_job_id`, `STEP_RUNS.trace_ref`/`idempotency_key`, `DOCUMENTS.content_hash`. Verified: ruff+pytest (2 pass), frontend lint+build, both apps run, curl shows CORS header and all deps ok. CI not yet run on GitHub. Phase 0 done. Next: Phase 1 breakdown (finalize schema, Alembic, JWT auth, orgs/RBAC).

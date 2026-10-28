@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     mongo_url: str
     mongo_db: str
     redis_url: str
+    cors_origins: list[str] = ["http://localhost:3000"]
 
 
 settings = Settings()

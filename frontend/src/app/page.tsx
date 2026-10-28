@@ -1,3 +1,5 @@
+import DepsStatus from "./deps-status";
+
 const FEATURES = [
   "Document RAG with source citations",
   "Multi-step workflow execution",
@@ -30,6 +32,7 @@ export default function Home() {
             </li>
           ))}
         </ul>
+        <DepsStatus />
         <p className="mt-10 rounded-md border border-dashed border-zinc-300 px-4 py-3 text-sm text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">
           Frontend scaffold ready (Phase 0). Sign-in, upload + chat, and the
           workflow editor arrive in Phase 7.
