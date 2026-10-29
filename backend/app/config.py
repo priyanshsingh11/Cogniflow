@@ -25,5 +25,17 @@ class Settings(BaseSettings):
     llm_timeout_seconds: float = 60.0
     llm_max_attempts: int = 8
 
+    # Knowledge / RAG (phase 3). Files go to a local folder behind a
+    # StorageBackend interface; Cloudflare R2 swaps in at deploy time (phase 11)
+    # without touching callers.
+    storage_dir: str = "storage"
+    embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
+    embedding_cache_dir: str = ".embedding_cache"
+    max_upload_mb: int = 5
+    chunk_size: int = 1000  # characters per chunk
+    chunk_overlap: int = 200  # characters of overlap between neighbours
+    rag_top_k: int = 6  # passages retrieved by default
+    rag_max_chunks_per_doc: int = 5_000  # safety cap against pathological files
+
 
 settings = Settings()
