@@ -1,0 +1,24 @@
+# Model tiers for the router. Free models only. Order matters: first entry is
+# tried first; later entries are failure fallbacks within the tier. When the
+# whole tier fails (or output is invalid) the gateway escalates to the next
+# tier up, then to last_resort. Format: "<provider>:<model id>".
+# Free model lists change often -- re-check provider model lists when a model
+# starts returning 404/400.
+tiers:
+  small:
+    - groq:openai/gpt-oss-20b
+    - openrouter:google/gemma-4-26b-a4b-it:free
+    - openrouter:liquid/lfm-2.5-2.6b:free
+  medium:
+    - groq:qwen/qwen3.8-27b
+    - openrouter:google/gemma-4-31b-it:free
+    - openrouter:poolside/laguna-s-2.1:free
+  large:
+    - groq:openai/gpt-oss-120b
+    - openrouter:nvidia/nemotron-3-ultra-550b-a55b:free
+    - openrouter:nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free
+last_resort:
+  - openrouter:openrouter/free
+# Verified 2026-10-29: all groq models OK; openrouter gemma/lfm/xing models are
+# valid but frequently 429 (that is what the fallback chain is for).
+# NOT usable: thinkingmachines/inkling:free (403, agentic-harness only).

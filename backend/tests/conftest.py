@@ -34,9 +34,7 @@ os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
 async def _ensure_database() -> None:
     conn = await asyncpg.connect(ADMIN_DB_URL)
     try:
-        exists = await conn.fetchval(
-            "SELECT 1 FROM pg_database WHERE datname = $1", TEST_DB_NAME
-        )
+        exists = await conn.fetchval("SELECT 1 FROM pg_database WHERE datname = $1", TEST_DB_NAME)
         if not exists:
             await conn.execute(f'CREATE DATABASE "{TEST_DB_NAME}"')
     finally:
@@ -48,7 +46,9 @@ async def _truncate_all() -> None:
 
     async with engine.begin() as conn:
         await conn.execute(
-            text("TRUNCATE users, organizations, memberships, workspaces CASCADE")
+            text(
+                "TRUNCATE users, organizations, memberships, workspaces, agents, llm_calls CASCADE"
+            )
         )
     # Connections are bound to the event loop that created them; tests use
     # fresh asyncio.run() loops, so never leave pooled connections behind.

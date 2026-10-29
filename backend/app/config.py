@@ -16,5 +16,14 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 60 * 24
 
+    # LLM providers (free tiers). A provider without a key is simply skipped
+    # by the gateway.
+    groq_api_key: str = ""
+    openrouter_api_key: str = ""
+    groq_rpm: int = 25  # requests/minute the gateway allows itself per provider
+    openrouter_rpm: int = 15
+    llm_timeout_seconds: float = 60.0
+    llm_max_attempts: int = 8
+
 
 settings = Settings()
