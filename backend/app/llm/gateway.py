@@ -85,12 +85,19 @@ class LLMGateway:
                 continue
             problem = validator(response.content) if validator else None
             if problem is None:
+                self._stamp(attempts, decision.reason)
                 return GatewayResult(response, label, decision.reason, attempts)
             attempts[-1].status = "invalid_output"
             attempts[-1].error_type = problem
             skip_tier = label  # quality problem: stop using this tier, escalate
 
+        self._stamp(attempts, decision.reason)
         raise AllModelsFailedError(attempts)
+
+    @staticmethod
+    def _stamp(attempts: list[Attempt], reason: str) -> None:
+        for a in attempts:
+            a.route_reason = reason
 
     async def _call_with_retry(
         self,

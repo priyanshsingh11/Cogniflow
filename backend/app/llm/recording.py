@@ -20,12 +20,12 @@ def record_attempts(
         session.add(
             LLMCall(
                 workspace_id=workspace_id,
-                agent_id=agent_id,
+                agent_id=a.agent_id or agent_id,
                 step_run_id=step_run_id,
                 provider=a.provider,
                 model=a.model,
                 tier=a.tier,
-                route_reason=route_reason,
+                route_reason=a.route_reason or route_reason,
                 attempt_no=a.attempt_no,
                 status=a.status,
                 error_type=a.error_type,

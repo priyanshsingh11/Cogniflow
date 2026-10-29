@@ -1,3 +1,4 @@
+import uuid
 from dataclasses import dataclass, field
 from enum import StrEnum
 
@@ -70,6 +71,8 @@ class Attempt:
     latency_ms: int = 0
     prompt_tokens: int = 0
     completion_tokens: int = 0
+    route_reason: str = ""  # set by the gateway for every attempt of a call
+    agent_id: uuid.UUID | None = None  # set by the agent runtime
 
 
 @dataclass
