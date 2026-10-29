@@ -5,6 +5,6 @@ __pycache__/
 .ruff_cache/
 node_modules/
 .next/
-.storage/
-storage/
-.embedding_cache/
+# RAG local file storage and downloaded embedding model (backend/.env paths)
+/backend/storage/
+/backend/.embedding_cache/

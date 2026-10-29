@@ -1,5 +1,6 @@
 from app.models.agent import Agent
 from app.models.base import Base
+from app.models.document import Document, DocumentChunk
 from app.models.enums import Role
 from app.models.llm_call import LLMCall
 from app.models.organization import Membership, Organization
@@ -15,4 +16,6 @@ __all__ = [
     "Workspace",
     "Agent",
     "LLMCall",
+    "Document",
+    "DocumentChunk",
 ]

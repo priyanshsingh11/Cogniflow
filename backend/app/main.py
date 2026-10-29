@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import agents, auth, health, llm, organizations, workspaces
+from app.api import agents, auth, health, knowledge, llm, organizations, workspaces
 from app.config import settings
 from app.db.mongo import mongo_client
 from app.db.postgres import engine
@@ -34,3 +34,4 @@ app.include_router(workspaces.router)
 app.include_router(llm.router)
 app.include_router(agents.router)
 app.include_router(agents.coordinator_router)
+app.include_router(knowledge.router)

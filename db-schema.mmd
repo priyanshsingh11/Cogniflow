@@ -65,6 +65,8 @@ erDiagram
         string storage_path
         string content_hash "dedupe within workspace [NEW]"
         string status "pending|processing|ready|failed"
+        int size_bytes "added in 0003 [NEW]"
+        text error_message "why indexing failed [NEW]"
         timestamptz created_at
     }
     DOCUMENT_CHUNKS {
@@ -73,7 +75,7 @@ erDiagram
         uuid workspace_id FK "denormalized for tenant filter"
         int chunk_index
         text content
-        vector embedding "pgvector"
+        vector embedding "384 dims, HNSW + cosine [NEW]"
         int token_count
     }
     AGENTS {

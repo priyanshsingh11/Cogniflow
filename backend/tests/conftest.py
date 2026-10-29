@@ -10,6 +10,7 @@ Requires `docker compose up -d` (postgres healthy) before `uv run pytest`.
 
 import asyncio
 import os
+import tempfile
 from pathlib import Path
 
 import asyncpg
@@ -29,6 +30,8 @@ os.environ["DATABASE_URL"] = TEST_DATABASE_URL
 os.environ.setdefault("MONGO_URL", "mongodb://localhost:27017")
 os.environ.setdefault("MONGO_DB", "test")
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
+# Uploaded files go to a throwaway dir so pytest never fills the repo.
+os.environ["STORAGE_DIR"] = tempfile.mkdtemp(prefix="cogniflow_test_storage_")
 
 
 async def _ensure_database() -> None:
@@ -47,7 +50,8 @@ async def _truncate_all() -> None:
     async with engine.begin() as conn:
         await conn.execute(
             text(
-                "TRUNCATE users, organizations, memberships, workspaces, agents, llm_calls CASCADE"
+                "TRUNCATE users, organizations, memberships, workspaces, agents, "
+                "llm_calls, documents, document_chunks CASCADE"
             )
         )
     # Connections are bound to the event loop that created them; tests use
@@ -73,6 +77,18 @@ def clean_tables():
     asyncio.run(_truncate_all())
     yield
     asyncio.run(_truncate_all())
+
+
+@pytest.fixture(autouse=True)
+def fake_embedder():
+    """No test may download the real 100 MB model: install a deterministic
+    fake for the duration of every test (live coverage lives in
+    test_embed_live.py, opt-in via RUN_LIVE_EMBED=1)."""
+    from app.rag.embeddings import FakeEmbedder, set_embedder
+
+    set_embedder(FakeEmbedder())
+    yield
+    set_embedder(None)
 
 
 @pytest.fixture()
