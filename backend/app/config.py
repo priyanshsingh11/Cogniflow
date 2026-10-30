@@ -37,5 +37,16 @@ class Settings(BaseSettings):
     rag_top_k: int = 6  # passages retrieved by default
     rag_max_chunks_per_doc: int = 5_000  # safety cap against pathological files
 
+    # MCP (phase 4): connect-per-request (no session pool until arq/phase 5).
+    mcp_timeout_seconds: int = 30  # connect + discover/invoke budget
+    mcp_max_result_bytes: int = 262_144  # stored/returned tool output cap (256 KB)
+
+    # Chat message sync (phase 3b): pending Postgres row -> Mongo -> flipped.
+    # A reaper retries rows stuck in `pending` (crash between the two writes).
+    chat_reaper_enabled: bool = True
+    chat_reaper_interval_seconds: int = 60
+    chat_reaper_stuck_seconds: int = 60
+    chat_reaper_max_attempts: int = 3  # then the row is marked failed
+
 
 settings = Settings()

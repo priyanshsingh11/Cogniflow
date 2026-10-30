@@ -17,6 +17,7 @@ erDiagram
     WORKFLOW_VERSIONS ||--o{ WORKFLOW_STEPS : contains
     WORKFLOW_VERSIONS ||--o{ WORKFLOW_RUNS : executed_as
     CONVERSATIONS |o--o{ WORKFLOW_RUNS : triggers
+    CONVERSATIONS ||--o{ MESSAGES : contains
     WORKFLOW_RUNS ||--o{ STEP_RUNS : has
     WORKFLOW_STEPS ||--o{ STEP_RUNS : instantiated_as
     STEP_RUNS ||--o{ TOOL_CALLS : makes
@@ -106,12 +107,22 @@ erDiagram
         bool requires_approval
     }
     CONVERSATIONS {
-        uuid id PK "[NEW]"
+        uuid id PK "[NEW, 0004]"
         uuid workspace_id FK
-        uuid user_id FK
+        uuid user_id FK "creator/owner"
         string title
-        string mongo_conversation_id "ref to Mongo messages [NEW]"
-        string status "pending|active|archived"
+        timestamptz created_at
+    }
+    MESSAGES {
+        uuid id PK "[NEW, 0004]"
+        uuid conversation_id FK
+        uuid workspace_id FK "denormalized"
+        string role "user|assistant"
+        text content "staged while pending, nulled after sync"
+        jsonb citations "assistant passages"
+        jsonb meta "tier, route_reason"
+        string status "pending|synced|failed"
+        int attempts "reaper write attempts"
         timestamptz created_at
     }
     WORKFLOWS {

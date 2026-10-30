@@ -3,8 +3,9 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
+from app.llm.types import Tier
 from app.rag.retrieval import Passage
 
 
@@ -49,6 +50,13 @@ class AskIn(BaseModel):
     question: str = Field(min_length=1, max_length=4_000)
     top_k: int = Field(default=6, ge=1, le=20)
     tier: str | None = None  # optional pin, overrides the router
+
+    @field_validator("tier")
+    @classmethod
+    def _tier(cls, v: str | None) -> str | None:
+        if v is not None:
+            Tier(v)  # raises ValueError -> 422 (never a 500 from the router)
+        return v
 
 
 class AskOut(BaseModel):

@@ -27,7 +27,9 @@ TEST_DATABASE_URL = f"postgresql+asyncpg://cogniflow:devpassword@localhost:5432/
 
 # Must happen before any `app.*` import (settings/engine read these at import).
 os.environ["DATABASE_URL"] = TEST_DATABASE_URL
-os.environ.setdefault("MONGO_URL", "mongodb://localhost:27017")
+# Credentialed URL: the compose Mongo has root auth enabled (ping alone works
+# anonymously, but the message-cleanup delete in this file needs credentials).
+os.environ.setdefault("MONGO_URL", "mongodb://cogniflow:devpassword@localhost:27017")
 os.environ.setdefault("MONGO_DB", "test")
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
 # Uploaded files go to a throwaway dir so pytest never fills the repo.
@@ -51,12 +53,30 @@ async def _truncate_all() -> None:
         await conn.execute(
             text(
                 "TRUNCATE users, organizations, memberships, workspaces, agents, "
-                "llm_calls, documents, document_chunks CASCADE"
+                "llm_calls, documents, document_chunks, conversations, messages, "
+                "mcp_servers, mcp_tools, tool_calls CASCADE"
             )
         )
     # Connections are bound to the event loop that created them; tests use
     # fresh asyncio.run() loops, so never leave pooled connections behind.
     await engine.dispose()
+
+
+def _clear_mongo_messages() -> None:
+    """Mongo holds message content (test DB `test`); clear it between tests
+    with a short-lived client so no loop-bound client leaks across tests."""
+    from motor.motor_asyncio import AsyncIOMotorClient
+
+    from app.config import settings
+
+    async def go():
+        client = AsyncIOMotorClient(settings.mongo_url)
+        try:
+            await client[settings.mongo_db]["messages"].delete_many({})
+        finally:
+            client.close()
+
+    asyncio.run(go())
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -75,8 +95,10 @@ def test_database():
 def clean_tables():
     """Every test starts with empty tables (and leave them empty behind)."""
     asyncio.run(_truncate_all())
+    _clear_mongo_messages()
     yield
     asyncio.run(_truncate_all())
+    _clear_mongo_messages()
 
 
 @pytest.fixture(autouse=True)
