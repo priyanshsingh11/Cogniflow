@@ -339,6 +339,7 @@ def record_tool_call(
 ) -> uuid.UUID:
     """Stage one tool_calls row. Caller commits."""
     row = ToolCall(
+        id=uuid.uuid4(),  # assigned now so callers get the id before flush
         workspace_id=workspace_id,
         mcp_tool_id=mcp_tool_id,
         agent_id=agent_id,

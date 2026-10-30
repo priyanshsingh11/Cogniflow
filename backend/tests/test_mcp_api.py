@@ -10,7 +10,6 @@ from fastapi.testclient import TestClient
 
 from app.mcp import client as mcp_client
 from app.mcp.client import DiscoveredTool, McpConnectionError, ToolOutcome
-
 from tests.test_tenancy import _add_member, _first_org_and_workspace, _signup
 
 ADD = DiscoveredTool(
@@ -169,7 +168,7 @@ def test_server_crud_and_duplicate_name(client: TestClient):
     created = _register(client, user, ws, name="demo")
     assert created.status_code == 201, created.text
     server = created.json()
-    assert server["status"] == "registered" and server["url_or_command"].endswith(".py")
+    assert server["status"] == "registered" and server["url_or_command"] == sys.executable
     assert server["args"] == ["server.py"]
 
     dup = _register(client, user, ws, name="demo")
@@ -422,7 +421,7 @@ def test_invoke_transport_failure_is_502_and_logged(client: TestClient, fake_mcp
     tool_id = _discover(client, user, ws, server_id).json()["tools"][0]["id"]
 
     fake_mcp["call_error"] = McpConnectionError("connection refused")
-    _invoke(client, user, ws, tool_id, expect=502)
+    _invoke(client, user, ws, tool_id, {"a": 1, "b": 2}, expect=502)
 
     rows = _tool_call_rows()
     assert len(rows) == 1 and rows[0].status == "error"

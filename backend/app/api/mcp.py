@@ -167,9 +167,9 @@ async def patch_tool(
     pair = await service.get_tool(session, ctx.workspace.id, tool_id)
     if pair is None:
         raise HTTPException(status_code=404, detail="MCP tool not found")
-    tool, server_name = pair
+    tool, server = pair
     tool = await service.update_tool(session, tool, payload)
-    return ToolOut.from_row(tool, server_name)
+    return ToolOut.from_row(tool, server.name)
 
 
 @router.post("/tools/{tool_id}/invoke", response_model=InvokeOut)
