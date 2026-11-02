@@ -76,3 +76,115 @@ export interface ChatTurn {
   tier: string;
   route_reason: string;
 }
+
+// ---- Agents and MCP tools (pickers in the workflow editor) ----
+
+export interface AgentSummary {
+  id: string;
+  name: string;
+  role: string;
+}
+
+export interface McpToolSummary {
+  id: string;
+  server_name: string;
+  name: string;
+  description: string | null;
+  approved: boolean;
+  requires_approval: boolean;
+  active: boolean;
+}
+
+// ---- Workflows (phase 5) ----
+
+export type StepType =
+  | "llm"
+  | "knowledge_search"
+  | "mcp_tool"
+  | "condition"
+  | "agent"
+  | "coordinator"
+  | "approval";
+
+export interface WorkflowStep {
+  id: string;
+  name: string;
+  position: number;
+  type: StepType;
+  config: Record<string, unknown>;
+}
+
+export interface WorkflowVersion {
+  id: string;
+  workflow_id: string;
+  version: number;
+  steps: WorkflowStep[];
+  created_at: string;
+}
+
+export interface Workflow {
+  id: string;
+  name: string;
+  description: string | null;
+  current_version_id: string | null;
+  current_version: WorkflowVersion | null;
+  created_at: string;
+}
+
+export interface StepInput {
+  name: string;
+  type: StepType;
+  position: number;
+  config: Record<string, unknown>;
+}
+
+export type RunStatus =
+  | "queued"
+  | "running"
+  | "waiting_approval"
+  | "succeeded"
+  | "failed"
+  | "cancelled";
+
+export interface StepRun {
+  id: string;
+  step_name: string;
+  attempt: number;
+  status: string;
+  input: Record<string, unknown> | null;
+  output: Record<string, unknown> | null;
+  error: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+  created_at: string;
+  llm_calls_count: number;
+  tool_calls_count: number;
+}
+
+export interface WorkflowRun {
+  id: string;
+  workflow_id: string;
+  workflow_version_id: string;
+  status: RunStatus;
+  input: Record<string, unknown>;
+  output: Record<string, unknown> | null;
+  error: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+  created_at: string;
+  step_runs: StepRun[];
+}
+
+// ---- Approvals (phase 6) ----
+
+export interface Approval {
+  id: string;
+  workflow_run_id: string | null;
+  step_run_id: string | null;
+  status: "pending" | "approved" | "rejected";
+  reason: string | null;
+  description: string | null;
+  details: Record<string, unknown> | null;
+  requested_at: string;
+  decided_at: string | null;
+}

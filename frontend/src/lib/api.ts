@@ -8,13 +8,20 @@
 
 import { clearToken, getToken } from "@/lib/auth";
 import type {
+  AgentSummary,
+  Approval,
   ChatMessage,
   ChatTurn,
   Conversation,
   KnowledgeDocument,
+  McpToolSummary,
   Organization,
+  RunStatus,
+  StepInput,
   TokenResponse,
   User,
+  Workflow,
+  WorkflowRun,
   Workspace,
 } from "@/types";
 
@@ -169,4 +176,93 @@ export function sendMessage(
     `/workspaces/${workspaceId}/conversations/${conversationId}/messages`,
     { method: "POST", body: JSON.stringify({ content }) },
   );
+}
+
+// ---- Pickers for the workflow editor ----
+
+export function listAgents(workspaceId: string): Promise<AgentSummary[]> {
+  return apiFetch<AgentSummary[]>(`/workspaces/${workspaceId}/agents`);
+}
+
+export function listMcpTools(workspaceId: string): Promise<McpToolSummary[]> {
+  return apiFetch<McpToolSummary[]>(`/workspaces/${workspaceId}/mcp/tools`);
+}
+
+// ---- Workflows and runs (phase 5) ----
+
+export function listWorkflows(workspaceId: string): Promise<Workflow[]> {
+  return apiFetch<Workflow[]>(`/workspaces/${workspaceId}/workflows`);
+}
+
+export function getWorkflow(workspaceId: string, workflowId: string): Promise<Workflow> {
+  return apiFetch<Workflow>(`/workspaces/${workspaceId}/workflows/${workflowId}`);
+}
+
+export function createWorkflow(
+  workspaceId: string,
+  payload: { name: string; description?: string; steps: StepInput[] },
+): Promise<Workflow> {
+  return apiFetch<Workflow>(`/workspaces/${workspaceId}/workflows`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+/** Saves the steps as a new immutable version; it becomes the current one. */
+export function createWorkflowVersion(
+  workspaceId: string,
+  workflowId: string,
+  steps: StepInput[],
+): Promise<unknown> {
+  return apiFetch<unknown>(`/workspaces/${workspaceId}/workflows/${workflowId}/versions`, {
+    method: "POST",
+    body: JSON.stringify({ steps }),
+  });
+}
+
+export function triggerRun(
+  workspaceId: string,
+  workflowId: string,
+  input: Record<string, unknown>,
+): Promise<WorkflowRun> {
+  return apiFetch<WorkflowRun>(`/workspaces/${workspaceId}/workflows/${workflowId}/runs`, {
+    method: "POST",
+    body: JSON.stringify({ input, idempotency_key: crypto.randomUUID() }),
+  });
+}
+
+export function listRuns(
+  workspaceId: string,
+  options: { status?: RunStatus } = {},
+): Promise<WorkflowRun[]> {
+  const query = options.status ? `?status=${options.status}` : "";
+  return apiFetch<WorkflowRun[]>(`/workspaces/${workspaceId}/runs${query}`);
+}
+
+export function getRun(workspaceId: string, runId: string): Promise<WorkflowRun> {
+  return apiFetch<WorkflowRun>(`/workspaces/${workspaceId}/runs/${runId}`);
+}
+
+export function cancelRun(workspaceId: string, runId: string): Promise<WorkflowRun> {
+  return apiFetch<WorkflowRun>(`/workspaces/${workspaceId}/runs/${runId}/cancel`, {
+    method: "POST",
+  });
+}
+
+// ---- Approvals (phase 6) ----
+
+export function listApprovals(workspaceId: string): Promise<Approval[]> {
+  return apiFetch<Approval[]>(`/workspaces/${workspaceId}/approvals`);
+}
+
+export function decideApproval(
+  workspaceId: string,
+  approvalId: string,
+  action: "approve" | "reject",
+  reason?: string,
+): Promise<Approval> {
+  return apiFetch<Approval>(`/workspaces/${workspaceId}/approvals/${approvalId}/decide`, {
+    method: "POST",
+    body: JSON.stringify({ action, reason: reason || null }),
+  });
 }

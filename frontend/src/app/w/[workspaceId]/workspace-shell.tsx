@@ -10,6 +10,9 @@ import type { Workspace } from "@/types";
 const NAV = [
   { href: "documents", label: "Documents" },
   { href: "chat", label: "Chat" },
+  { href: "workflows", label: "Workflows" },
+  { href: "runs", label: "Runs" },
+  { href: "approvals", label: "Approvals" },
 ];
 
 export function WorkspaceShell({ children }: { children: React.ReactNode }) {

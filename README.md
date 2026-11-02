@@ -43,10 +43,10 @@ It is **not a chatbot wrapper**. The goal is to demonstrate backend and system-d
 | **Reliability** | Per-step timeout and retries with backoff, idempotency keys (a repeated trigger returns the same run), step leases so two workers never execute one step, resume from the first unfinished step, and a reaper that recovers expired leases and runs whose enqueue was lost |
 | **Human approval** | An `approval` step (or an MCP tool flagged `requires_approval`) pauses the run as `waiting_approval` and creates an approval request; a member approves to resume or rejects to fail the run |
 | **Observability (partial)** | Every model attempt, including failures and rate-limit skips, is stored in `llm_calls` with tier, routing reason, tokens, latency and agent |
-| **Frontend** | Next.js app: landing page with live backend/DB health, signup, login, dashboard (orgs and workspaces), and a workspace area with **Documents** (upload, live indexing status, delete) and **Chat** (conversations, cited answers with expandable source passages, history). Workflow editor, run history and approval inbox are still to come |
+| **Frontend** | Next.js app: landing page with live backend/DB health, signup, login, dashboard, and a workspace area with **Documents** (upload, live indexing status, delete), **Chat** (cited answers with expandable source passages, history), a **Workflow editor** (form-based step list: add, reorder, remove, per-type settings, retries/timeouts, saves as a new version; run with a JSON input), **Runs** (live status, per-step input/output/error/timing, cancel) and an **Approval inbox** (approve or reject paused runs) |
 | **Quality** | 139 automated tests against a real Postgres (plus Mongo message tests), CI on GitHub Actions |
 
-**Planned (not built yet):** the workflow editor, run history and approval UI, scheduled triggers, evaluation, visual workflow editor, deployment. See [Roadmap](#roadmap).
+**Planned (not built yet):** scheduled triggers, evaluation, visual workflow editor, deployment. See [Roadmap](#roadmap).
 
 ---
 
@@ -408,7 +408,7 @@ cd ../frontend && npm run lint && npm run build
 | 4 | MCP layer: register servers, discover/validate/invoke tools (GitHub, filesystem) | ✅ Done (backend) |
 | 5 | Workflow engine: workflow API, LangGraph executor on arq, retries, timeouts, idempotency, resume | ✅ Done (backend) |
 | 6 | Human approval: pause/resume runs | ✅ Done (backend) |
-| 7 | Frontend MVP: upload and chat, workflow editor, run history, approval inbox | 🟡 Documents + chat done; workflows, runs, approvals next |
+| 7 | Frontend MVP: upload and chat, workflow editor, run history, approval inbox | ✅ Done |
 | 8 | Observability and safety: audit logs, rate limits, usage dashboard | ⬜ |
 | 9 | Evaluation: datasets, cases, runs, scores | ⬜ |
 | 10 | Visual builder (React Flow), multi-agent extras, schedule/webhook triggers | ⬜ |
@@ -420,7 +420,7 @@ MVP target = phases 0–7 (matches [OVERVIEW](OVERVIEW)).
 
 ## Known limitations
 
-- No UI yet for workflows, runs, approvals, agents, MCP servers or the coordinator; use the API or `/docs`.
+- No UI yet for managing agents, MCP servers or the coordinator (the workflow editor can pick existing agents and approved MCP tools); use the API or `/docs` for those. The frontend has no automated tests yet (lint and build only).
 - Coordinator steps run sequentially; no streaming responses.
 - Cost is always `$0` because only free models are configured (token counts are logged).
 - Free-tier models are rate-limited and change over time; the fallback chain exists for that reason, and `models.yaml` may need occasional updates.
