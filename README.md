@@ -43,10 +43,10 @@ It is **not a chatbot wrapper**. The goal is to demonstrate backend and system-d
 | **Reliability** | Per-step timeout and retries with backoff, idempotency keys (a repeated trigger returns the same run), step leases so two workers never execute one step, resume from the first unfinished step, and a reaper that recovers expired leases and runs whose enqueue was lost |
 | **Human approval** | An `approval` step (or an MCP tool flagged `requires_approval`) pauses the run as `waiting_approval` and creates an approval request; a member approves to resume or rejects to fail the run |
 | **Observability (partial)** | Every model attempt, including failures and rate-limit skips, is stored in `llm_calls` with tier, routing reason, tokens, latency and agent |
-| **Frontend** | Next.js app: landing page with live backend/DB health, signup, login, dashboard (orgs and workspaces) |
+| **Frontend** | Next.js app: landing page with live backend/DB health, signup, login, dashboard (orgs and workspaces), and a workspace area with **Documents** (upload, live indexing status, delete) and **Chat** (conversations, cited answers with expandable source passages, history). Workflow editor, run history and approval inbox are still to come |
 | **Quality** | 139 automated tests against a real Postgres (plus Mongo message tests), CI on GitHub Actions |
 
-**Planned (not built yet):** the upload/chat UI, scheduled triggers, evaluation, visual workflow editor, deployment. See [Roadmap](#roadmap).
+**Planned (not built yet):** the workflow editor, run history and approval UI, scheduled triggers, evaluation, visual workflow editor, deployment. See [Roadmap](#roadmap).
 
 ---
 
@@ -408,7 +408,7 @@ cd ../frontend && npm run lint && npm run build
 | 4 | MCP layer: register servers, discover/validate/invoke tools (GitHub, filesystem) | ✅ Done (backend) |
 | 5 | Workflow engine: workflow API, LangGraph executor on arq, retries, timeouts, idempotency, resume | ✅ Done (backend) |
 | 6 | Human approval: pause/resume runs | ✅ Done (backend) |
-| 7 | Frontend MVP: upload and chat, workflow editor, run history, approval inbox | ⬜ |
+| 7 | Frontend MVP: upload and chat, workflow editor, run history, approval inbox | 🟡 Documents + chat done; workflows, runs, approvals next |
 | 8 | Observability and safety: audit logs, rate limits, usage dashboard | ⬜ |
 | 9 | Evaluation: datasets, cases, runs, scores | ⬜ |
 | 10 | Visual builder (React Flow), multi-agent extras, schedule/webhook triggers | ⬜ |
@@ -420,7 +420,7 @@ MVP target = phases 0–7 (matches [OVERVIEW](OVERVIEW)).
 
 ## Known limitations
 
-- No UI for upload, chat, agents or the coordinator yet; use the API or `/docs`.
+- No UI yet for workflows, runs, approvals, agents, MCP servers or the coordinator; use the API or `/docs`.
 - Coordinator steps run sequentially; no streaming responses.
 - Cost is always `$0` because only free models are configured (token counts are logged).
 - Free-tier models are rate-limited and change over time; the fallback chain exists for that reason, and `models.yaml` may need occasional updates.

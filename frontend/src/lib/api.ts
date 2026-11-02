@@ -7,7 +7,16 @@
  */
 
 import { clearToken, getToken } from "@/lib/auth";
-import type { Organization, TokenResponse, User, Workspace } from "@/types";
+import type {
+  ChatMessage,
+  ChatTurn,
+  Conversation,
+  KnowledgeDocument,
+  Organization,
+  TokenResponse,
+  User,
+  Workspace,
+} from "@/types";
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8001";
@@ -32,7 +41,8 @@ export async function apiFetch<T>(
     cache: "no-store",
     headers: {
       Accept: "application/json",
-      ...(init.body ? { "Content-Type": "application/json" } : {}),
+      // FormData sets its own multipart boundary header; only JSON bodies get a type.
+      ...(typeof init.body === "string" ? { "Content-Type": "application/json" } : {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...init.headers,
     },
@@ -92,4 +102,71 @@ export function listWorkspaces(
   orgId: string,
 ): Promise<Workspace[]> {
   return apiFetch<Workspace[]>(`/organizations/${orgId}/workspaces`);
+}
+
+export function getWorkspace(workspaceId: string): Promise<Workspace> {
+  return apiFetch<Workspace>(`/workspaces/${workspaceId}`);
+}
+
+// ---- Documents (phase 3a) ----
+
+export function listDocuments(workspaceId: string): Promise<KnowledgeDocument[]> {
+  return apiFetch<KnowledgeDocument[]>(`/workspaces/${workspaceId}/documents`);
+}
+
+export function uploadDocument(
+  workspaceId: string,
+  file: File,
+): Promise<KnowledgeDocument> {
+  const form = new FormData();
+  form.append("file", file);
+  return apiFetch<KnowledgeDocument>(`/workspaces/${workspaceId}/documents`, {
+    method: "POST",
+    body: form,
+  });
+}
+
+export function deleteDocument(
+  workspaceId: string,
+  documentId: string,
+): Promise<void> {
+  return apiFetch<void>(`/workspaces/${workspaceId}/documents/${documentId}`, {
+    method: "DELETE",
+  });
+}
+
+// ---- Chat (phase 3b) ----
+
+export function listConversations(workspaceId: string): Promise<Conversation[]> {
+  return apiFetch<Conversation[]>(`/workspaces/${workspaceId}/conversations`);
+}
+
+export function createConversation(
+  workspaceId: string,
+  title = "",
+): Promise<Conversation> {
+  return apiFetch<Conversation>(`/workspaces/${workspaceId}/conversations`, {
+    method: "POST",
+    body: JSON.stringify({ title }),
+  });
+}
+
+export function listMessages(
+  workspaceId: string,
+  conversationId: string,
+): Promise<ChatMessage[]> {
+  return apiFetch<ChatMessage[]>(
+    `/workspaces/${workspaceId}/conversations/${conversationId}/messages`,
+  );
+}
+
+export function sendMessage(
+  workspaceId: string,
+  conversationId: string,
+  content: string,
+): Promise<ChatTurn> {
+  return apiFetch<ChatTurn>(
+    `/workspaces/${workspaceId}/conversations/${conversationId}/messages`,
+    { method: "POST", body: JSON.stringify({ content }) },
+  );
 }

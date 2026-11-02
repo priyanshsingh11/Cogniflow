@@ -115,12 +115,14 @@ export default function DashboardPage() {
                 </div>
                 <ul className="mt-3 grid gap-2 text-sm text-zinc-600 dark:text-zinc-400">
                   {workspaces.map((w) => (
-                    <li
-                      key={w.id}
-                      className="flex items-center justify-between rounded border border-zinc-100 px-3 py-2 dark:border-zinc-800"
-                    >
-                      <span>{w.name}</span>
-                      <code className="text-xs text-zinc-400">{w.id.slice(0, 8)}</code>
+                    <li key={w.id}>
+                      <Link
+                        href={`/w/${w.id}/documents`}
+                        className="flex items-center justify-between rounded border border-zinc-100 px-3 py-2 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800"
+                      >
+                        <span>{w.name}</span>
+                        <span className="text-xs text-zinc-400">Open →</span>
+                      </Link>
                     </li>
                   ))}
                 </ul>

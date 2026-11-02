@@ -31,24 +31,48 @@ export interface TokenResponse {
   user: User;
 }
 
-export type RunStatus =
-  | "pending"
-  | "running"
-  | "awaiting_approval"
-  | "succeeded"
-  | "failed";
+// ---- Knowledge (phase 3) ----
 
-export interface Workflow {
+export type DocumentStatus = "pending" | "processing" | "ready" | "failed";
+
+export interface KnowledgeDocument {
   id: string;
-  workspaceId: string;
-  name: string;
-  status: "draft" | "active";
+  filename: string;
+  status: DocumentStatus;
+  size_bytes: number;
+  error_message: string | null;
+  created_at: string;
 }
 
-export interface WorkflowRun {
+export interface Passage {
+  document_id: string;
+  filename: string;
+  chunk_index: number;
+  content: string;
+  score: number;
+}
+
+// ---- Chat (phase 3b) ----
+
+export interface Conversation {
   id: string;
-  workflowId: string;
-  status: RunStatus;
-  startedAt: string | null;
-  finishedAt: string | null;
+  title: string;
+  user_id: string;
+  created_at: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string | null;
+  citations: Passage[];
+  meta: { tier?: string; route_reason?: string } | null;
+  created_at: string;
+}
+
+export interface ChatTurn {
+  user_message: ChatMessage;
+  assistant_message: ChatMessage;
+  tier: string;
+  route_reason: string;
 }
