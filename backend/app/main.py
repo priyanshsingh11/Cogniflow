@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import (
     agents,
+    approvals,
     auth,
     conversations,
     health,
@@ -13,6 +14,8 @@ from app.api import (
     llm,
     mcp,
     organizations,
+    runs,
+    workflows,
     workspaces,
 )
 from app.chat.service import reaper_loop
@@ -43,6 +46,9 @@ async def lifespan(app: FastAPI):
     await engine.dispose()
     mongo_client.close()
     await shutdown_gateway()
+    from app.worker.queue import close_arq_pool
+
+    await close_arq_pool()
     await redis.aclose()
 
 
@@ -63,3 +69,6 @@ app.include_router(agents.coordinator_router)
 app.include_router(knowledge.router)
 app.include_router(conversations.router)
 app.include_router(mcp.router)
+app.include_router(workflows.router)
+app.include_router(runs.router)
+app.include_router(approvals.router)

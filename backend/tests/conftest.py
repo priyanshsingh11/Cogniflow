@@ -33,6 +33,8 @@ os.environ.setdefault("MONGO_URL", "mongodb://cogniflow:devpassword@localhost:27
 os.environ.setdefault("MONGO_DB", "test")
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
 # Uploaded files go to a throwaway dir so pytest never fills the repo.
+# No arq worker in tests: queued jobs run inline, before the HTTP response returns.
+os.environ["WORKER_MODE"] = "inline"
 os.environ["STORAGE_DIR"] = tempfile.mkdtemp(prefix="cogniflow_test_storage_")
 
 
@@ -54,7 +56,8 @@ async def _truncate_all() -> None:
             text(
                 "TRUNCATE users, organizations, memberships, workspaces, agents, "
                 "llm_calls, documents, document_chunks, conversations, messages, "
-                "mcp_servers, mcp_tools, tool_calls CASCADE"
+                "mcp_servers, mcp_tools, tool_calls, workflows, workflow_versions, "
+                "workflow_steps, workflow_runs, step_runs, approvals CASCADE"
             )
         )
     # Connections are bound to the event loop that created them; tests use

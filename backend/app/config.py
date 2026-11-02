@@ -48,5 +48,14 @@ class Settings(BaseSettings):
     chat_reaper_stuck_seconds: int = 60
     chat_reaper_max_attempts: int = 3  # then the row is marked failed
 
+    # Workflows & Worker (phase 5 & 6)
+    worker_mode: str = "arq"  # "arq" | "inline"
+    step_lease_duration_seconds: int = 120
+    step_default_timeout_seconds: float = 60.0
+    workflow_reaper_enabled: bool = True
+    workflow_reaper_interval_seconds: int = 60
+    workflow_reaper_stuck_seconds: int = 120
+    workflow_reaper_max_attempts: int = 3
+
 
 settings = Settings()

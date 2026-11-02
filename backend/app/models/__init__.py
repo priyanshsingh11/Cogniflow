@@ -7,6 +7,14 @@ from app.models.llm_call import LLMCall
 from app.models.mcp import McpServer, McpTool, ToolCall
 from app.models.organization import Membership, Organization
 from app.models.user import User
+from app.models.workflow import (
+    Approval,
+    StepRun,
+    Workflow,
+    WorkflowRun,
+    WorkflowStep,
+    WorkflowVersion,
+)
 from app.models.workspace import Workspace
 
 __all__ = [
@@ -25,4 +33,10 @@ __all__ = [
     "McpServer",
     "McpTool",
     "ToolCall",
+    "Workflow",
+    "WorkflowVersion",
+    "WorkflowStep",
+    "WorkflowRun",
+    "StepRun",
+    "Approval",
 ]

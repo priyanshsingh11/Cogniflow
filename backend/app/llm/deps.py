@@ -39,6 +39,11 @@ def get_gateway() -> LLMGateway:
     return _gateway
 
 
+def set_gateway(gateway: LLMGateway | None) -> None:
+    global _gateway
+    _gateway = gateway
+
+
 async def shutdown_gateway() -> None:
     global _gateway
     if _gateway is not None:

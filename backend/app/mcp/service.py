@@ -35,7 +35,19 @@ class ServerNotConnectedError(Exception):
 
 
 class ApprovalRequiredError(Exception):
-    """Sensitive tool: refused until the phase-6 approval flow exists."""
+    """Sensitive tool: requires human approval (Phase 6)."""
+
+    def __init__(
+        self,
+        message: str,
+        tool_id: uuid.UUID | None = None,
+        tool_name: str | None = None,
+        arguments: dict[str, Any] | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.tool_id = tool_id
+        self.tool_name = tool_name
+        self.arguments = arguments
 
 
 class ArgumentsInvalidError(Exception):
@@ -242,6 +254,8 @@ async def invoke_tool(
     arguments: dict[str, Any],
     invoked_by: str = "api",
     agent_id: uuid.UUID | None = None,
+    step_run_id: uuid.UUID | None = None,
+    approval_id: uuid.UUID | None = None,
 ) -> InvokeOutcome:
     """validate -> MCP call -> record. Domain errors (see above) instead of
     HTTPException so agents can reuse this directly."""
@@ -252,9 +266,24 @@ async def invoke_tool(
     if not tool.active:
         raise ToolRetiredError(f"Tool '{tool.name}' is no longer exposed by its server")
     if tool.requires_approval:
-        raise ApprovalRequiredError(
-            f"Tool '{tool.name}' requires human approval (not yet available; phase 6)"
-        )
+        approved = False
+        if approval_id is not None:
+            from app.models.workflow import Approval
+
+            appr = await session.get(Approval, approval_id)
+            if (
+                appr is not None
+                and appr.workspace_id == workspace_id
+                and appr.status == "approved"
+            ):
+                approved = True
+        if not approved:
+            raise ApprovalRequiredError(
+                f"Tool '{tool.name}' requires human approval",
+                tool_id=tool.id,
+                tool_name=tool.name,
+                arguments=arguments,
+            )
     if server.status != "connected":
         raise ServerNotConnectedError(
             f"Server '{server.name}' is not connected (status: {server.status}); "
@@ -274,6 +303,7 @@ async def invoke_tool(
             latency_ms=0,
             invoked_by=invoked_by,
             agent_id=agent_id,
+            step_run_id=step_run_id,
         )
         await session.commit()
         raise ArgumentsInvalidError(exc.message) from exc
@@ -297,6 +327,7 @@ async def invoke_tool(
             latency_ms=latency_ms,
             invoked_by=invoked_by,
             agent_id=agent_id,
+            step_run_id=step_run_id,
         )
         await session.commit()
         raise InvokeFailedError(str(exc)) from exc
@@ -313,6 +344,7 @@ async def invoke_tool(
         latency_ms=latency_ms,
         invoked_by=invoked_by,
         agent_id=agent_id,
+        step_run_id=step_run_id,
     )
     await session.commit()
     return InvokeOutcome(

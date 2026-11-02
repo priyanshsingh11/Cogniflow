@@ -99,6 +99,7 @@ class DiscoverOut(BaseModel):
 
 class InvokeIn(BaseModel):
     arguments: dict = Field(default_factory=dict)
+    approval_id: uuid.UUID | None = None
 
 
 class InvokeOut(BaseModel):

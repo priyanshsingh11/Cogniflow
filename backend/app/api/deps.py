@@ -114,3 +114,10 @@ def require_role(minimum: Role) -> Callable[..., TenantContext]:
         return ctx
 
     return dependency
+
+
+require_viewer = require_role(Role.VIEWER)
+require_member = require_role(Role.MEMBER)
+require_admin = require_role(Role.ADMIN)
+require_owner = require_role(Role.OWNER)
+

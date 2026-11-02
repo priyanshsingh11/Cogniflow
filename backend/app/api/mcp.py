@@ -186,6 +186,7 @@ async def invoke_tool(
             tool_id=tool_id,
             arguments=payload.arguments,
             invoked_by="api",
+            approval_id=payload.approval_id,
         )
     except service.ToolNotFound as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
