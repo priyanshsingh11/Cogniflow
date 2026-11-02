@@ -25,4 +25,3 @@ class ApprovalOut(BaseModel):
     created_at: datetime.datetime
 
     model_config = {"from_attributes": True}
-

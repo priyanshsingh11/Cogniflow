@@ -35,6 +35,7 @@ def compile_workflow_graph(
 
     # 1. Add nodes
     for step in sorted_steps:
+
         async def node_fn(state: WorkflowState, s: WorkflowStep = step) -> WorkflowState:
             # If already paused for approval or failed, do not execute
             if state.get("status") in ("waiting_approval", "failed"):

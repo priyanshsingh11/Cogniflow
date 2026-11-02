@@ -21,11 +21,7 @@ router = APIRouter(prefix="/workspaces/{workspace_id}", tags=["runs"])
 
 
 async def _load_run_out(session: AsyncSession, run: WorkflowRun) -> WorkflowRunOut:
-    stmt = (
-        select(StepRun)
-        .where(StepRun.workflow_run_id == run.id)
-        .order_by(StepRun.created_at)
-    )
+    stmt = select(StepRun).where(StepRun.workflow_run_id == run.id).order_by(StepRun.created_at)
     step_runs = list((await session.execute(stmt)).scalars().all())
 
     step_runs_out: list[StepRunOut] = []

@@ -19,9 +19,7 @@ async def execute_approval_step(ctx: StepExecutionContext) -> StepResult:
     existing_approval = res.scalar_one_or_none()
 
     if existing_approval is not None:
-        decided_by_str = (
-            str(existing_approval.decided_by) if existing_approval.decided_by else None
-        )
+        decided_by_str = str(existing_approval.decided_by) if existing_approval.decided_by else None
         decided_at_str = (
             existing_approval.decided_at.isoformat() if existing_approval.decided_at else None
         )

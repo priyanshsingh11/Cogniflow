@@ -75,4 +75,3 @@ async def execute_condition_step(ctx: StepExecutionContext) -> StepResult:
         output={"result": result, "next_step": next_step},
         next_step=next_step,
     )
-

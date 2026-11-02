@@ -124,4 +124,3 @@ class WorkflowRunOut(BaseModel):
     step_runs: list[StepRunOut] = Field(default_factory=list)
 
     model_config = {"from_attributes": True}
-

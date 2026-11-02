@@ -87,4 +87,3 @@ async def execute_coordinator_step(ctx: StepExecutionContext) -> StepResult:
             ],
         }
     )
-

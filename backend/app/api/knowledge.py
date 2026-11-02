@@ -23,9 +23,10 @@ from app.models import Document, Role
 from app.rag.answer import NoIndexedDocumentsError, answer_question
 from app.rag.parsing import SUPPORTED_EXTENSIONS, extension_of
 from app.rag.retrieval import search as vector_search
-from app.rag.service import delete_document, get_document
+from app.rag.service import delete_document, get_document, process_document
 from app.schemas.knowledge import AskIn, AskOut, DocumentOut, PassageOut, SearchIn, SearchOut
 from app.storage import get_storage
+from app.worker.queue import enqueue_job
 
 router = APIRouter(prefix="/workspaces/{workspace_id}", tags=["knowledge"])
 require_viewer = require_role(Role.VIEWER)
@@ -96,9 +97,10 @@ async def upload_document(
         raise HTTPException(status_code=500, detail="Could not store the file") from None
     await session.commit()
 
-    from app.worker.queue import enqueue_job
-
-    await enqueue_job("process_document", str(document.id))
+    if settings.worker_mode == "inline":
+        background_tasks.add_task(process_document, document.id)  # tests: no arq worker
+    else:
+        await enqueue_job("process_document", str(document.id))
     return _document_out(document)
 
 

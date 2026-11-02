@@ -67,6 +67,30 @@ async def reap_stuck_runs() -> int:
                 workflow_run.error = f"Step '{step_run.step_name}' lease expired"
                 workflow_run.finished_at = now
 
+        # Runs whose enqueue never succeeded (no queue_job_id): nothing will ever pick
+        # them up, so hand them to the queue again.
+        orphan_cutoff = now - datetime.timedelta(seconds=settings.workflow_reaper_stuck_seconds)
+        orphans = (
+            (
+                await session.execute(
+                    select(WorkflowRun).where(
+                        WorkflowRun.status == "queued",
+                        WorkflowRun.queue_job_id.is_(None),
+                        WorkflowRun.created_at < orphan_cutoff,
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        for orphan in orphans:
+            from app.worker.queue import enqueue_job
+
+            job_id = await enqueue_job("execute_workflow_run", str(orphan.id))
+            if job_id:
+                orphan.queue_job_id = job_id
+                reaped_count += 1
+
         await session.commit()
 
     return reaped_count

@@ -2,6 +2,7 @@
 
 that require approval.
 """
+
 import asyncio
 import uuid
 
@@ -14,7 +15,7 @@ from app.llm.gateway import LLMGateway
 from app.main import app
 from app.mcp import client as mcp_client
 from app.mcp.client import DiscoveredTool, ToolOutcome
-from app.models.workflow import Approval, StepRun, WorkflowRun
+from app.models.workflow import Approval
 from app.workflows.executor import execute_run
 from tests.fakes import FakeProvider
 from tests.test_llm_gateway import _no_sleep, _registry
@@ -114,10 +115,14 @@ def test_workflow_pauses_for_human_approval(client: TestClient):
             },
         ],
     }
-    wf = client.post(f"/workspaces/{ws}/workflows", json=wf_payload, headers=alice["headers"]).json()
+    wf = client.post(
+        f"/workspaces/{ws}/workflows", json=wf_payload, headers=alice["headers"]
+    ).json()
 
     # Trigger run
-    r = client.post(f"/workspaces/{ws}/workflows/{wf['id']}/runs", json={}, headers=alice["headers"]).json()
+    r = client.post(
+        f"/workspaces/{ws}/workflows/{wf['id']}/runs", json={}, headers=alice["headers"]
+    ).json()
     run_id = r["id"]
 
     # Execute run
@@ -154,11 +159,17 @@ def test_approval_rejection_fails_run(client: TestClient):
             }
         ],
     }
-    wf = client.post(f"/workspaces/{ws}/workflows", json=wf_payload, headers=alice["headers"]).json()
-    r = client.post(f"/workspaces/{ws}/workflows/{wf['id']}/runs", json={}, headers=alice["headers"]).json()
+    wf = client.post(
+        f"/workspaces/{ws}/workflows", json=wf_payload, headers=alice["headers"]
+    ).json()
+    r = client.post(
+        f"/workspaces/{ws}/workflows/{wf['id']}/runs", json={}, headers=alice["headers"]
+    ).json()
     _run_db(lambda: execute_run(uuid.UUID(r["id"])))
 
-    approvals = client.get(f"/workspaces/{ws}/approvals?status=pending", headers=alice["headers"]).json()
+    approvals = client.get(
+        f"/workspaces/{ws}/approvals?status=pending", headers=alice["headers"]
+    ).json()
     appr_id = approvals[0]["id"]
 
     # Reject
@@ -209,8 +220,12 @@ def test_approval_grant_resumes_and_finishes_workflow(client: TestClient, fake):
             },
         ],
     }
-    wf = client.post(f"/workspaces/{ws}/workflows", json=wf_payload, headers=alice["headers"]).json()
-    r = client.post(f"/workspaces/{ws}/workflows/{wf['id']}/runs", json={}, headers=alice["headers"]).json()
+    wf = client.post(
+        f"/workspaces/{ws}/workflows", json=wf_payload, headers=alice["headers"]
+    ).json()
+    r = client.post(
+        f"/workspaces/{ws}/workflows/{wf['id']}/runs", json={}, headers=alice["headers"]
+    ).json()
     run_id = r["id"]
 
     # Initial execution pauses at sign_off
@@ -218,7 +233,9 @@ def test_approval_grant_resumes_and_finishes_workflow(client: TestClient, fake):
     assert paused.status == "waiting_approval"
 
     # Approve
-    approvals = client.get(f"/workspaces/{ws}/approvals?status=pending", headers=alice["headers"]).json()
+    approvals = client.get(
+        f"/workspaces/{ws}/approvals?status=pending", headers=alice["headers"]
+    ).json()
     appr_id = approvals[0]["id"]
     client.post(
         f"/workspaces/{ws}/approvals/{appr_id}/decide",
@@ -243,8 +260,12 @@ def test_cannot_decide_already_decided_approval_409(client: TestClient):
         "name": "Single Gate",
         "steps": [{"name": "gate", "type": "approval", "config": {}}],
     }
-    wf = client.post(f"/workspaces/{ws}/workflows", json=wf_payload, headers=alice["headers"]).json()
-    r = client.post(f"/workspaces/{ws}/workflows/{wf['id']}/runs", json={}, headers=alice["headers"]).json()
+    wf = client.post(
+        f"/workspaces/{ws}/workflows", json=wf_payload, headers=alice["headers"]
+    ).json()
+    r = client.post(
+        f"/workspaces/{ws}/workflows/{wf['id']}/runs", json={}, headers=alice["headers"]
+    ).json()
     _run_db(lambda: execute_run(uuid.UUID(r["id"])))
 
     approvals = client.get(f"/workspaces/{ws}/approvals", headers=alice["headers"]).json()
@@ -301,8 +322,12 @@ def test_mcp_tool_requiring_approval_pauses_workflow_and_resumes(client: TestCli
             }
         ],
     }
-    wf = client.post(f"/workspaces/{ws}/workflows", json=wf_payload, headers=alice["headers"]).json()
-    r = client.post(f"/workspaces/{ws}/workflows/{wf['id']}/runs", json={}, headers=alice["headers"]).json()
+    wf = client.post(
+        f"/workspaces/{ws}/workflows", json=wf_payload, headers=alice["headers"]
+    ).json()
+    r = client.post(
+        f"/workspaces/{ws}/workflows/{wf['id']}/runs", json={}, headers=alice["headers"]
+    ).json()
     run_id = r["id"]
 
     # Run pauses because tool has requires_approval=True
@@ -310,7 +335,9 @@ def test_mcp_tool_requiring_approval_pauses_workflow_and_resumes(client: TestCli
     assert paused.status == "waiting_approval"
 
     # An approval was created with tool arguments
-    approvals = client.get(f"/workspaces/{ws}/approvals?status=pending", headers=alice["headers"]).json()
+    approvals = client.get(
+        f"/workspaces/{ws}/approvals?status=pending", headers=alice["headers"]
+    ).json()
     assert len(approvals) == 1
     assert approvals[0]["details"]["arguments"] == {"customer_id": "cust-99", "amount": 50}
 
@@ -412,4 +439,3 @@ def test_approvals_rbac(client: TestClient):
         headers=alice["headers"],
     )
     assert r_decide_o.status_code == 200
-

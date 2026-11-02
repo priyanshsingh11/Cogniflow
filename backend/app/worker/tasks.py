@@ -36,4 +36,3 @@ async def reap_stuck_runs(ctx: dict[str, Any] | None = None) -> int:
     """Reaper for stuck workflow runs and expired step leases."""
     logger.info("Running workflow run lease reaper task")
     return await run_stuck_runs_reaper()
-

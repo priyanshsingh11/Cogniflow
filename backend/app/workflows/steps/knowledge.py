@@ -36,4 +36,3 @@ async def execute_knowledge_step(ctx: StepExecutionContext) -> StepResult:
             "count": len(passages_data),
         }
     )
-

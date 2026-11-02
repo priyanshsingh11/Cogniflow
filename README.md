@@ -39,11 +39,14 @@ It is **not a chatbot wrapper**. The goal is to demonstrate backend and system-d
 | **Knowledge / RAG** | Document upload (.txt, .md, .pdf) with dedupe, background parse → chunk → embed into pgvector (local fastembed model), cosine search, cited answers |
 | **Chat** | Workspace conversations: post a message → retrieval + one LLM call → answer with `[n]` citations; history in Mongo via two-phase writes with crash recovery (reaper) |
 | **MCP tools** | Register stdio/HTTP MCP servers (admin), discover tools, validate arguments against each tool's JSON Schema, invoke with a timeout and result cap, every attempt logged in `tool_calls`. Approved tools appear to agents as `mcp__<server>__<tool>` |
+| **Workflows** | Versioned workflows of ordered steps (`llm`, `knowledge_search`, `mcp_tool`, `condition`, `agent`, `coordinator`, `approval`) with `{{...}}` templating between steps. Runs execute in a background **arq worker**; every run and step run is a Postgres row with status, input, output, error and timing |
+| **Reliability** | Per-step timeout and retries with backoff, idempotency keys (a repeated trigger returns the same run), step leases so two workers never execute one step, resume from the first unfinished step, and a reaper that recovers expired leases and runs whose enqueue was lost |
+| **Human approval** | An `approval` step (or an MCP tool flagged `requires_approval`) pauses the run as `waiting_approval` and creates an approval request; a member approves to resume or rejects to fail the run |
 | **Observability (partial)** | Every model attempt, including failures and rate-limit skips, is stored in `llm_calls` with tier, routing reason, tokens, latency and agent |
 | **Frontend** | Next.js app: landing page with live backend/DB health, signup, login, dashboard (orgs and workspaces) |
-| **Quality** | 117 automated tests against a real Postgres (plus Mongo message tests), CI on GitHub Actions |
+| **Quality** | 139 automated tests against a real Postgres (plus Mongo message tests), CI on GitHub Actions |
 
-**Planned (not built yet):** the upload/chat UI, the durable workflow engine, human approval steps, scheduled triggers, evaluation, visual workflow editor, deployment. See [Roadmap](#roadmap).
+**Planned (not built yet):** the upload/chat UI, scheduled triggers, evaluation, visual workflow editor, deployment. See [Roadmap](#roadmap).
 
 ---
 
@@ -70,7 +73,9 @@ flowchart LR
     RAG -->|documents, chunks, vectors| PG
     RL --> REDIS[("Redis")]
     API --> MONGO[("MongoDB<br/>chat messages")]
-    API -.background jobs (phase 5: arq).-> QUEUE[("arq worker<br/>phase 5")]
+    API -->|"enqueue run / index document"| QUEUE[("Redis queue")]
+    QUEUE --> WORKER["arq worker<br/>LangGraph executor · reapers"]
+    WORKER -->|runs, step_runs, approvals| PG
 ```
 
 **Who owns what**
@@ -168,7 +173,12 @@ Authoritative diagram: [`db-schema.mmd`](db-schema.mmd) (Mermaid ER diagram of t
 | `mcp_tools` | Discovered tools with input schema, `approved`, `requires_approval`, `active` flags |
 | `tool_calls` | One row per invocation attempt: arguments, result, `ok`/`error`/`invalid`, latency, caller (`api`/`agent`) |
 
-**Planned tables:** workflows, versions and steps, runs and step runs, tool calls, approvals, audit logs, evaluation datasets/cases/runs/results.
+| `workflows`, `workflow_versions`, `workflow_steps` | A workflow, its immutable versions, and each version's ordered steps (type + JSON config) |
+| `workflow_runs` | One execution: status (`queued`/`running`/`waiting_approval`/`succeeded`/`failed`/`cancelled`), input/output, idempotency key, queue job id |
+| `step_runs` | One row per step per run: attempt, status, input/output, error, lease owner and expiry |
+| `approvals` | Pending/approved/rejected human decisions tied to a run and step |
+
+**Planned tables:** audit logs, evaluation datasets/cases/runs/results.
 
 ---
 
@@ -212,6 +222,16 @@ Interactive docs at `/docs` (Swagger) and `/redoc` when the backend is running. 
 | POST | `/workspaces/{id}/mcp/tools/{tid}/invoke` | member | Validate and call a tool; 422 bad arguments, 403 needs approval, 409 not discovered, 502 transport failure |
 | GET | `/workspaces/{id}/mcp/tool-calls` | viewer | Call history, newest first (`?limit=`, `?tool_id=`) |
 
+| POST, GET | `/workspaces/{id}/workflows` | member / viewer | Create (first version) / list workflows |
+| GET, PATCH, DELETE | `/workspaces/{id}/workflows/{wid}` | viewer / member / admin | Read, edit, delete a workflow |
+| POST, GET | `/workspaces/{id}/workflows/{wid}/versions` | member / viewer | Add a new version / list versions |
+| GET | `/workspaces/{id}/workflows/{wid}/versions/{n}` | viewer | One version with its steps |
+| POST, GET | `/workspaces/{id}/workflows/{wid}/runs` | member / viewer | Trigger a run (optional `idempotency_key`; returns immediately, `queued`) / list its runs |
+| GET | `/workspaces/{id}/runs`, `/workspaces/{id}/runs/{rid}` | viewer | List runs / one run with its step runs |
+| POST | `/workspaces/{id}/runs/{rid}/cancel` | member | Cancel a run |
+| GET | `/workspaces/{id}/approvals`, `/workspaces/{id}/approvals/{aid}` | viewer | List / read approval requests |
+| POST | `/workspaces/{id}/approvals/{aid}/decide` | member | `{action: approve|reject, reason?}`; approve resumes the run, reject fails it |
+
 Role order: `owner > admin > member > viewer`. Wrong tenant → 404. Insufficient role → 403.
 
 ---
@@ -227,6 +247,8 @@ Cogniflow/
 │   │   ├── llm/             Gateway, router, registry, providers, rate limiter, models.yaml
 │   │   ├── rag/             Parsing, chunking, embeddings, retrieval, shared cited-answer flow
 │   │   ├── chat/            Message persistence (Postgres staging → Mongo) and the reaper
+│   │   ├── workflows/       LangGraph compiler, durable executor, step handlers, templating, run reaper
+│   │   ├── worker/          arq queue interface, tasks and WorkerSettings (`arq app.worker.settings.WorkerSettings`)
 │   │   ├── storage/         StorageBackend protocol + local-folder implementation (R2 later)
 │   │   ├── models/          SQLAlchemy models
 │   │   ├── schemas/         Pydantic request/response models
@@ -286,6 +308,8 @@ curl -X POST http://localhost:8001/workspaces/<workspace_id>/knowledge/ask \
   -d '{"question": "What does the document say about X?"}'
 ```
 
+**Run a workflow.** Start the worker in a second terminal (`cd backend && uv run arq app.worker.settings.WorkerSettings`), create a workflow with steps such as `knowledge_search` → `approval` → `llm`, then `POST /workspaces/<id>/workflows/<wid>/runs`. Poll `GET /workspaces/<id>/runs/<rid>`; when it reaches `waiting_approval`, decide it via `POST /workspaces/<id>/approvals/<aid>/decide`.
+
 **Inspect the database:** `docker compose exec postgres psql -U cogniflow -d cogniflow`, then e.g. `SELECT tier, provider, model, status FROM llm_calls ORDER BY created_at DESC LIMIT 10;`
 
 ---
@@ -310,6 +334,9 @@ Backend settings come from environment variables or `backend/.env` (see [`.env.e
 | `EMBEDDING_MODEL` | `all-MiniLM-L6-v2` | fastembed model (~100 MB, downloaded once) |
 | `MAX_UPLOAD_MB` | 5 | Upload size cap |
 | `MCP_TIMEOUT_SECONDS`, `MCP_MAX_RESULT_BYTES` | 30 / 262144 | Connect+call budget and stored/returned tool output cap |
+| `WORKER_MODE` | `arq` | `arq` queues to Redis; `inline` (tests) queues nothing |
+| `STEP_DEFAULT_TIMEOUT_SECONDS`, `STEP_LEASE_DURATION_SECONDS` | 60 / 120 | Per-step timeout default; how long a worker owns a step |
+| `WORKFLOW_REAPER_INTERVAL_SECONDS`, `WORKFLOW_REAPER_STUCK_SECONDS`, `WORKFLOW_REAPER_MAX_ATTEMPTS` | 60 / 120 / 3 | Stuck-run recovery |
 | `CHAT_REAPER_ENABLED`, `CHAT_REAPER_INTERVAL_SECONDS` | true / 60 | In-process reaper for stuck message writes |
 | `CHAT_REAPER_STUCK_SECONDS`, `CHAT_REAPER_MAX_ATTEMPTS` | 60 / 3 | When a `pending` row is retried, and when it is marked `failed` |
 
@@ -347,8 +374,8 @@ cd ../frontend && npm run lint && npm run build
 | Rules-based router + escalation, no classifier model | Free-tier quota is scarce; rules are free, predictable and testable |
 | Failure fallback and quality escalation kept separate | They are different problems with different remedies |
 | Prompt-level tool protocol instead of native function calling | Works on every free model; the gateway stays provider-agnostic |
-| Redis + arq queue (planned) instead of SQS | Deploying on a free PaaS, not AWS; the queue sits behind an interface |
-| LangGraph for orchestration (planned) with Postgres as the durable record | Resume-after-crash needs our own step state, not only framework state |
+| Redis + arq queue instead of SQS | Deploying on a free PaaS, not AWS; the queue sits behind an interface |
+| LangGraph for orchestration, with Postgres as the durable record | Resume-after-crash needs our own step state, not only framework state |
 | 404 for foreign tenant resources | Does not reveal that a resource exists |
 | Tests on real Postgres | Exercises the real migration and extension |
 | Model names in `models.yaml` | Free model lists churn; changing a model must not need a code change |
@@ -379,8 +406,8 @@ cd ../frontend && npm run lint && npm run build
 | 2 | LLM layer: gateway, router, fallback, agents, coordinator | ✅ Done |
 | 3 | Knowledge/RAG: upload, chunk, embed, pgvector search, cited answers, chat history in Mongo | ✅ Done (backend; UI in phase 7) |
 | 4 | MCP layer: register servers, discover/validate/invoke tools (GitHub, filesystem) | ✅ Done (backend) |
-| 5 | Workflow engine: workflow API, LangGraph executor on arq, retries, timeouts, idempotency, resume | ⬜ |
-| 6 | Human approval: pause/resume runs | ⬜ |
+| 5 | Workflow engine: workflow API, LangGraph executor on arq, retries, timeouts, idempotency, resume | ✅ Done (backend) |
+| 6 | Human approval: pause/resume runs | ✅ Done (backend) |
 | 7 | Frontend MVP: upload and chat, workflow editor, run history, approval inbox | ⬜ |
 | 8 | Observability and safety: audit logs, rate limits, usage dashboard | ⬜ |
 | 9 | Evaluation: datasets, cases, runs, scores | ⬜ |
@@ -399,7 +426,9 @@ MVP target = phases 0–7 (matches [OVERVIEW](OVERVIEW)).
 - Free-tier models are rate-limited and change over time; the fallback chain exists for that reason, and `models.yaml` may need occasional updates.
 - RAG limits: 5 MB per file, `.txt`/`.md`/`.pdf` only (no OCR or DOCX), English-leaning embedding model, single shared model per deployment.
 - MCP: one connection per request (no session pool). A `stdio` server runs a command **on the API host**, so registering one is admin-only and is not safe for untrusted admins; before deploying publicly, restrict allowed commands. Server credentials/env are not stored yet (no secret handling), so servers needing tokens (e.g. GitHub) are not usable until that is decided. Tools needing approval stay refused until Phase 6.
-- Background indexing and the message reaper run in-process (FastAPI tasks); they move to the arq worker in phase 5. Chunks are re-embedded with the stored model only — changing `EMBEDDING_MODEL` needs a re-upload (no version field yet).
+- Document indexing and the workflow reaper run on the arq worker (the chat reaper also still runs in-process); without a worker running (or if Redis is down) enqueueing falls back to in-process execution.
+- Workflows: steps run sequentially (no parallel branches or loops), no schedule/webhook triggers yet, and no UI (phase 7). Retried steps with side effects (e.g. MCP calls) are re-executed.
+- Chunks are re-embedded with the stored model only — changing `EMBEDDING_MODEL` needs a re-upload (no version field yet).
 
 ---
 

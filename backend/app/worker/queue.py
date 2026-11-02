@@ -40,15 +40,9 @@ async def enqueue_job(job_name: str, *args: Any, **kwargs: Any) -> str | None:
     with fallback/inline mode for test environments.
     """
     if settings.worker_mode == "inline":
-        from app.worker import tasks
-
-        task_fn = getattr(tasks, job_name, None)
-        if task_fn is not None:
-            job_id = f"inline-{uuid.uuid4()}"
-            await task_fn(None, *args, **kwargs)  # deterministic: runs before the response
-            return job_id
-        logger.error("Unknown inline task: %s", job_name)
-        return None
+        # Tests: nothing consumes the queue. Tests drive `execute_run` directly,
+        # and uploads index through FastAPI BackgroundTasks (see api/knowledge.py).
+        return f"inline-{uuid.uuid4()}"
 
     try:
         pool = await get_arq_pool()

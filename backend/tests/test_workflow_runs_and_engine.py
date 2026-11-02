@@ -2,14 +2,13 @@
 
 retries, idempotency and stuck-run reaper (Phase 5).
 """
+
 import asyncio
 import datetime
-from datetime import timezone
 import uuid
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import select
 
 from app.db.postgres import SessionLocal
 from app.llm.deps import get_gateway
@@ -18,11 +17,9 @@ from app.main import app
 from app.mcp import client as mcp_client
 from app.mcp.client import DiscoveredTool, ToolOutcome
 from app.models.document import Document, DocumentChunk
-from app.models.llm_call import LLMCall
-from app.models.mcp import ToolCall
 from app.models.workflow import StepRun, WorkflowRun
-from app.worker.tasks import execute_workflow_run, process_document, reap_stuck_runs
-from app.workflows.executor import StepLeaseError, execute_run
+from app.worker.tasks import reap_stuck_runs
+from app.workflows.executor import execute_run
 from tests.fakes import FakeProvider
 from tests.test_llm_gateway import _no_sleep, _registry
 from tests.test_tenancy import _first_org_and_workspace, _signup
@@ -98,7 +95,9 @@ def test_trigger_run_and_idempotency_key(client: TestClient):
         "name": "Idempotent Flow",
         "steps": [{"name": "step1", "type": "llm", "config": {"prompt": "hello"}}],
     }
-    wf = client.post(f"/workspaces/{ws}/workflows", json=wf_payload, headers=alice["headers"]).json()
+    wf = client.post(
+        f"/workspaces/{ws}/workflows", json=wf_payload, headers=alice["headers"]
+    ).json()
 
     # Trigger with idempotency key
     r1 = client.post(
@@ -140,7 +139,9 @@ def test_execute_llm_step_and_records_llm_calls(client: TestClient, fake):
             }
         ],
     }
-    wf = client.post(f"/workspaces/{ws}/workflows", json=wf_payload, headers=alice["headers"]).json()
+    wf = client.post(
+        f"/workspaces/{ws}/workflows", json=wf_payload, headers=alice["headers"]
+    ).json()
 
     r = client.post(
         f"/workspaces/{ws}/workflows/{wf['id']}/runs",
@@ -198,7 +199,9 @@ def test_results_pass_between_steps(client: TestClient, fake):
             },
         ],
     }
-    wf = client.post(f"/workspaces/{ws}/workflows", json=wf_payload, headers=alice["headers"]).json()
+    wf = client.post(
+        f"/workspaces/{ws}/workflows", json=wf_payload, headers=alice["headers"]
+    ).json()
 
     r = client.post(
         f"/workspaces/{ws}/workflows/{wf['id']}/runs",
@@ -253,7 +256,9 @@ def test_knowledge_search_step(client: TestClient):
             }
         ],
     }
-    wf = client.post(f"/workspaces/{ws}/workflows", json=wf_payload, headers=alice["headers"]).json()
+    wf = client.post(
+        f"/workspaces/{ws}/workflows", json=wf_payload, headers=alice["headers"]
+    ).json()
 
     r = client.post(
         f"/workspaces/{ws}/workflows/{wf['id']}/runs",
@@ -304,7 +309,9 @@ def test_mcp_tool_step(client: TestClient, fake_mcp):
             }
         ],
     }
-    wf = client.post(f"/workspaces/{ws}/workflows", json=wf_payload, headers=alice["headers"]).json()
+    wf = client.post(
+        f"/workspaces/{ws}/workflows", json=wf_payload, headers=alice["headers"]
+    ).json()
 
     r = client.post(
         f"/workspaces/{ws}/workflows/{wf['id']}/runs",
@@ -353,7 +360,9 @@ def test_condition_step_routing(client: TestClient):
             },
         ],
     }
-    wf = client.post(f"/workspaces/{ws}/workflows", json=wf_payload, headers=alice["headers"]).json()
+    wf = client.post(
+        f"/workspaces/{ws}/workflows", json=wf_payload, headers=alice["headers"]
+    ).json()
 
     # Case 1: amount = 250 -> routes to high_value
     r1 = client.post(
@@ -382,7 +391,9 @@ def test_step_lease_prevents_concurrent_execution(client: TestClient):
         "name": "Lease Test Flow",
         "steps": [{"name": "step_busy", "type": "llm", "config": {"prompt": "test"}}],
     }
-    wf = client.post(f"/workspaces/{ws}/workflows", json=wf_payload, headers=alice["headers"]).json()
+    wf = client.post(
+        f"/workspaces/{ws}/workflows", json=wf_payload, headers=alice["headers"]
+    ).json()
     wf_id = uuid.UUID(wf["id"])
     ver_id = uuid.UUID(wf["current_version_id"])
 
@@ -398,7 +409,7 @@ def test_step_lease_prevents_concurrent_execution(client: TestClient):
             session.add(wf_run)
             await session.flush()
 
-            now = datetime.datetime.now(timezone.utc)
+            now = datetime.datetime.now(datetime.UTC)
             future = now + datetime.timedelta(seconds=120)
             step_run = StepRun(
                 workflow_run_id=wf_run.id,
@@ -420,7 +431,7 @@ def test_step_lease_prevents_concurrent_execution(client: TestClient):
             # A second worker tries to take the step
             from sqlalchemy import or_, update
 
-            now = datetime.datetime.now(timezone.utc)
+            now = datetime.datetime.now(datetime.UTC)
             stmt = (
                 update(StepRun)
                 .where(
@@ -446,7 +457,9 @@ def test_stuck_run_reaper(client: TestClient):
         "name": "Stuck Reaper Flow",
         "steps": [{"name": "stuck_step", "type": "llm", "config": {"prompt": "test"}}],
     }
-    wf = client.post(f"/workspaces/{ws}/workflows", json=wf_payload, headers=alice["headers"]).json()
+    wf = client.post(
+        f"/workspaces/{ws}/workflows", json=wf_payload, headers=alice["headers"]
+    ).json()
     wf_id = uuid.UUID(wf["id"])
     ver_id = uuid.UUID(wf["current_version_id"])
 
@@ -462,7 +475,7 @@ def test_stuck_run_reaper(client: TestClient):
             await session.flush()
 
             # Past expiration
-            past = datetime.datetime.now(timezone.utc) - datetime.timedelta(seconds=300)
+            past = datetime.datetime.now(datetime.UTC) - datetime.timedelta(seconds=300)
             step_run = StepRun(
                 workflow_run_id=wf_run.id,
                 step_name="stuck_step",
@@ -500,11 +513,67 @@ def test_cancel_run(client: TestClient):
         "name": "Cancel Flow",
         "steps": [{"name": "step1", "type": "llm", "config": {"prompt": "test"}}],
     }
-    wf = client.post(f"/workspaces/{ws}/workflows", json=wf_payload, headers=alice["headers"]).json()
+    wf = client.post(
+        f"/workspaces/{ws}/workflows", json=wf_payload, headers=alice["headers"]
+    ).json()
 
-    r = client.post(f"/workspaces/{ws}/workflows/{wf['id']}/runs", json={}, headers=alice["headers"]).json()
+    r = client.post(
+        f"/workspaces/{ws}/workflows/{wf['id']}/runs", json={}, headers=alice["headers"]
+    ).json()
     run_id = r["id"]
 
-    cancelled = client.post(f"/workspaces/{ws}/runs/{run_id}/cancel", headers=alice["headers"]).json()
+    cancelled = client.post(
+        f"/workspaces/{ws}/runs/{run_id}/cancel", headers=alice["headers"]
+    ).json()
     assert cancelled["status"] == "cancelled"
     assert cancelled["finished_at"] is not None
+
+
+def test_reaper_requeues_orphaned_queued_run(client: TestClient):
+    """A run whose enqueue never succeeded (no queue_job_id) is handed to the queue again;
+    one that has a job id is left alone."""
+    alice, _, ws = _setup(client)
+    wf = client.post(
+        f"/workspaces/{ws}/workflows",
+        json={
+            "name": "Orphan Flow",
+            "steps": [{"name": "s", "type": "llm", "config": {"prompt": "x"}}],
+        },
+        headers=alice["headers"],
+    ).json()
+
+    async def setup_runs():
+        async with SessionLocal() as session:
+            old = datetime.datetime.now(datetime.UTC) - datetime.timedelta(hours=1)
+            orphan = WorkflowRun(
+                workflow_id=uuid.UUID(wf["id"]),
+                workflow_version_id=uuid.UUID(wf["current_version_id"]),
+                workspace_id=uuid.UUID(ws),
+                status="queued",
+                created_at=old,
+            )
+            tracked = WorkflowRun(
+                workflow_id=uuid.UUID(wf["id"]),
+                workflow_version_id=uuid.UUID(wf["current_version_id"]),
+                workspace_id=uuid.UUID(ws),
+                status="queued",
+                queue_job_id="job-1",
+                created_at=old,
+            )
+            session.add_all([orphan, tracked])
+            await session.commit()
+            return orphan.id, tracked.id
+
+    orphan_id, tracked_id = _run_db(setup_runs)
+    assert _run_db(reap_stuck_runs) == 1
+
+    async def check():
+        async with SessionLocal() as session:
+            return (
+                (await session.get(WorkflowRun, orphan_id)).queue_job_id,
+                (await session.get(WorkflowRun, tracked_id)).queue_job_id,
+            )
+
+    orphan_job, tracked_job = _run_db(check)
+    assert orphan_job and orphan_job.startswith("inline-")
+    assert tracked_job == "job-1"

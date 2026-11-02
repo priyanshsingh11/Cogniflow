@@ -88,7 +88,9 @@ def test_workflow_versions(client: TestClient):
         "name": "Versioning Test",
         "steps": [{"name": "step1", "type": "llm", "config": {"prompt": "hello"}}],
     }
-    created = client.post(f"/workspaces/{ws}/workflows", json=wf_payload, headers=alice["headers"]).json()
+    created = client.post(
+        f"/workspaces/{ws}/workflows", json=wf_payload, headers=alice["headers"]
+    ).json()
     wf_id = created["id"]
 
     # Add version 2
@@ -114,7 +116,9 @@ def test_workflow_versions(client: TestClient):
     assert wf_res["current_version"]["version"] == 2
 
     # List versions
-    all_v = client.get(f"/workspaces/{ws}/workflows/{wf_id}/versions", headers=alice["headers"]).json()
+    all_v = client.get(
+        f"/workspaces/{ws}/workflows/{wf_id}/versions", headers=alice["headers"]
+    ).json()
     assert len(all_v) == 2
     assert [v["version"] for v in all_v] == [2, 1]
 
