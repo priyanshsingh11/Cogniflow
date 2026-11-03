@@ -280,7 +280,7 @@ def test_mcp_tool_step(client: TestClient, fake_mcp):
     # Register and discover MCP tool
     s_resp = client.post(
         f"/workspaces/{ws}/mcp/servers",
-        json={"name": "calc", "transport": "stdio", "command": "echo"},
+        json={"name": "calc", "transport": "stdio", "command": "python"},
         headers=alice["headers"],
     )
     s_id = s_resp.json()["id"]

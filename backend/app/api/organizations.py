@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_membership
+from app.core.audit import record_audit
 from app.db.postgres import get_pg
 from app.models import Membership, Organization, Role, User, Workspace
 from app.schemas.org import MemberAdd, MemberOut, OrgCreate, OrgOut, WorkspaceCreate, WorkspaceOut
@@ -123,6 +124,16 @@ async def add_member(
 
     membership = Membership(user_id=target.id, org_id=org_id, role=payload.role.value)
     session.add(membership)
+    await session.flush()
+    record_audit(
+        session,
+        action="org.member_added",
+        actor_id=user.id,
+        org_id=org_id,
+        entity_type="membership",
+        entity_id=membership.id,
+        metadata={"user_id": str(target.id), "email": target.email, "role": payload.role.value},
+    )
     await session.commit()
     return MemberOut(
         user_id=target.id,
@@ -160,6 +171,17 @@ async def create_workspace(
     membership = await _require_org_role(org_id, user, session, Role.MEMBER)
     workspace = Workspace(org_id=org_id, name=payload.name)
     session.add(workspace)
+    await session.flush()
+    record_audit(
+        session,
+        action="workspace.created",
+        actor_id=user.id,
+        workspace_id=workspace.id,
+        org_id=org_id,
+        entity_type="workspace",
+        entity_id=workspace.id,
+        metadata={"name": workspace.name},
+    )
     await session.commit()
     return WorkspaceOut(
         id=workspace.id,

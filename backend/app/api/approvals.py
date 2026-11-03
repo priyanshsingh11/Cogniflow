@@ -11,6 +11,7 @@ from app.api.deps import (
     require_member,
     require_viewer,
 )
+from app.core.audit import record_audit
 from app.models.workflow import Approval, StepRun, WorkflowRun
 from app.schemas.approval import ApprovalDecideIn, ApprovalOut
 from app.worker.queue import enqueue_job
@@ -72,6 +73,21 @@ async def decide_approval(
     appr.decided_by = ctx.user.id if ctx.user else None
     appr.decided_at = now
     appr.reason = payload.reason
+    # Staged before the branch below: every commit path carries it.
+    record_audit(
+        session,
+        action="approval.decided",
+        actor_id=ctx.user.id,
+        workspace_id=ctx.workspace.id,
+        org_id=ctx.org.id,
+        entity_type="approval",
+        entity_id=appr.id,
+        metadata={
+            "decision": appr.status,
+            "reason": payload.reason,
+            "workflow_run_id": str(appr.workflow_run_id) if appr.workflow_run_id else None,
+        },
+    )
 
     if payload.action == "approve":
         if appr.workflow_run_id and appr.step_run_id:

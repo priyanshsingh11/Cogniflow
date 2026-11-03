@@ -11,6 +11,8 @@ from app.api.deps import (
     require_member,
     require_viewer,
 )
+from app.api.ratelimit import limit_runs_workspace
+from app.core.audit import record_audit
 from app.models.llm_call import LLMCall
 from app.models.mcp import ToolCall
 from app.models.workflow import StepRun, Workflow, WorkflowRun
@@ -80,6 +82,7 @@ async def _load_run_out(session: AsyncSession, run: WorkflowRun) -> WorkflowRunO
 async def trigger_workflow_run(
     workflow_id: uuid.UUID,
     payload: RunTriggerIn,
+    _rate_limit: None = Depends(limit_runs_workspace),
     ctx: TenantContext = Depends(require_member),
     session: AsyncSession = Depends(get_pg),
 ) -> WorkflowRunOut:
@@ -112,6 +115,18 @@ async def trigger_workflow_run(
     session.add(run)
     await session.commit()
     await session.refresh(run)
+
+    record_audit(
+        session,
+        action="run.triggered",
+        actor_id=ctx.user.id,
+        workspace_id=ctx.workspace.id,
+        org_id=ctx.org.id,
+        entity_type="workflow_run",
+        entity_id=run.id,
+        metadata={"workflow_id": str(wf.id), "idempotency_key": payload.idempotency_key},
+    )
+    await session.commit()
 
     job_id = await enqueue_job("execute_workflow_run", str(run.id))
     if job_id:
@@ -192,6 +207,16 @@ async def cancel_run(
     if run.status in ("queued", "running", "waiting_approval"):
         run.status = "cancelled"
         run.finished_at = datetime.datetime.now(datetime.UTC)
+        record_audit(
+            session,
+            action="run.cancelled",
+            actor_id=ctx.user.id,
+            workspace_id=ctx.workspace.id,
+            org_id=ctx.org.id,
+            entity_type="workflow_run",
+            entity_id=run.id,
+            metadata={"workflow_id": str(run.workflow_id)},
+        )
         await session.commit()
         await session.refresh(run)
 

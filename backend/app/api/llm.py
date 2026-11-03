@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import TenantContext, require_role
+from app.api.ratelimit import limit_llm_user
 from app.db.postgres import get_pg
 from app.llm.deps import get_gateway
 from app.llm.errors import AllModelsFailedError
@@ -58,6 +59,7 @@ class ChatOut(BaseModel):
 @router.post("/chat", response_model=ChatOut)
 async def chat(
     payload: ChatIn,
+    _rate_limit: None = Depends(limit_llm_user),
     ctx: TenantContext = Depends(require_member),
     session: AsyncSession = Depends(get_pg),
     gateway: LLMGateway = Depends(get_gateway),

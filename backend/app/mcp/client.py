@@ -17,9 +17,11 @@ from typing import Any
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from mcp.client.streamable_http import streamable_http_client
+from mcp.shared._httpx_utils import create_mcp_http_client
 from mcp.types import CallToolResult
 
 from app.config import settings
+from app.mcp import safety
 from app.models.mcp import McpServer
 
 
@@ -48,22 +50,58 @@ class ToolOutcome:
         self.is_error = is_error
 
 
+def _credentials(server: McpServer) -> dict[str, Any]:
+    """Decrypt the stored credentials blob (empty dict when none/blocked)."""
+    if not server.credentials_enc:
+        return {}
+    try:
+        return safety.decrypt_credentials(server.credentials_enc)
+    except ValueError as exc:
+        raise McpConnectionError(f"MCP server '{server.name}': {exc}") from exc
+
+
+@asynccontextmanager
+async def _http_streams(url: str, headers: dict[str, str] | None):
+    """streamable_http_client with optional default headers (auth). When we
+    build the httpx client ourselves we own its lifecycle."""
+    client = create_mcp_http_client(headers=headers) if headers else None
+    try:
+        if client is None:
+            async with streamable_http_client(url) as streams:
+                yield streams
+        else:
+            async with streamable_http_client(url, http_client=client) as streams:
+                yield streams
+    finally:
+        if client is not None:
+            await client.aclose()
+
+
 @asynccontextmanager
 async def _connect(server: McpServer):
     """Initialized ClientSession, or McpConnectionError (incl. on timeout or
     any transport failure while the caller operates on the session)."""
+    creds = _credentials(server)
     try:
+        if server.transport == "stdio":
+            # Re-checked at spawn, not only at registration: rows may predate
+            # the allowlist or have been written straight into the database.
+            safety.require_command_allowed(server.url_or_command)
+            params = StdioServerParameters(
+                command=server.url_or_command,
+                args=list(server.args or []),
+                env=creds.get("env") or None,
+            )
+        else:
+            params = None
         async with asyncio.timeout(settings.mcp_timeout_seconds):
             if server.transport == "stdio":
-                params = StdioServerParameters(
-                    command=server.url_or_command, args=list(server.args or [])
-                )
                 async with stdio_client(params) as (read, write):
                     async with ClientSession(read, write) as session:
                         await session.initialize()
                         yield session
             else:
-                async with streamable_http_client(server.url_or_command) as (
+                async with _http_streams(server.url_or_command, creds.get("headers")) as (
                     read,
                     write,
                     _,
@@ -73,6 +111,8 @@ async def _connect(server: McpServer):
                         yield session
     except McpConnectionError:
         raise
+    except safety.CommandNotAllowedError as exc:
+        raise McpConnectionError(f"MCP server '{server.name}': {exc}") from exc
     except Exception as exc:  # spawn/timeout/transport failures, SDK internals
         raise McpConnectionError(f"MCP server '{server.name}' failed: {exc}") from exc
 

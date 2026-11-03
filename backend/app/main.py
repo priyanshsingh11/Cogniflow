@@ -7,23 +7,30 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api import (
     agents,
     approvals,
+    audit,
     auth,
     conversations,
     health,
     knowledge,
     llm,
     mcp,
+    metrics,
     organizations,
     runs,
+    usage,
     workflows,
     workspaces,
 )
 from app.chat.service import reaper_loop
 from app.config import settings
+from app.core.logging import setup_logging
 from app.db.mongo import mongo_client
 from app.db.postgres import engine
 from app.db.redis import redis
 from app.llm.deps import shutdown_gateway
+from app.middleware import RequestIDMiddleware
+
+setup_logging()  # JSON lines + request id before anything logs
 
 
 @asynccontextmanager
@@ -58,11 +65,18 @@ app.add_middleware(
     allow_origins=settings.cors_origins,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["X-Request-ID"],
 )
+# Outermost: assigns every request its id (X-Request-ID in/out) and emits the
+# one structured access line per request.
+app.add_middleware(RequestIDMiddleware)
 app.include_router(health.router)
 app.include_router(auth.router)
 app.include_router(organizations.router)
 app.include_router(workspaces.router)
+app.include_router(audit.router)
+app.include_router(usage.router)
+app.include_router(metrics.router)
 app.include_router(llm.router)
 app.include_router(agents.router)
 app.include_router(agents.coordinator_router)

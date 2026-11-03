@@ -25,6 +25,9 @@ class McpServer(Base, UUIDPkMixin, TimestampMixin):
     url_or_command: Mapped[str] = mapped_column(Text)
     args: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     secret_ref: Mapped[str | None] = mapped_column(String(255), nullable=True)  # phase 11
+    # Phase 8: per-server credentials ({"headers": {...}} / {"env": {...}})
+    # encrypted with a key derived from jwt_secret; never returned by the API.
+    credentials_enc: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(20), default="registered")
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
 

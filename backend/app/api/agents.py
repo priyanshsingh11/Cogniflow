@@ -18,6 +18,7 @@ from app.agents.runtime import AgentRunError, run_agent
 from app.agents.specialists import SPECIALISTS
 from app.agents.tools import ToolRegistry
 from app.api.deps import TenantContext, require_role, require_workspace
+from app.api.ratelimit import limit_llm_user
 from app.db.postgres import get_pg
 from app.llm.deps import get_gateway
 from app.llm.gateway import LLMGateway
@@ -188,6 +189,7 @@ class RunOut(BaseModel):
 async def run_agent_endpoint(
     agent_id: uuid.UUID,
     payload: RunIn,
+    _rate_limit: None = Depends(limit_llm_user),
     ctx: TenantContext = Depends(require_member),
     session: AsyncSession = Depends(get_pg),
     gateway: LLMGateway = Depends(get_gateway),
@@ -241,6 +243,7 @@ class CoordinatorOut(BaseModel):
 @coordinator_router.post("/run", response_model=CoordinatorOut)
 async def run_coordinator_endpoint(
     payload: CoordinatorIn,
+    _rate_limit: None = Depends(limit_llm_user),
     ctx: TenantContext = Depends(require_member),
     session: AsyncSession = Depends(get_pg),
     gateway: LLMGateway = Depends(get_gateway),

@@ -12,7 +12,10 @@ class LLMCall(Base, UUIDPkMixin, TimestampMixin):
     """One row per model attempt, including failures and rate-limit skips."""
 
     __tablename__ = "llm_calls"
-    __table_args__ = (Index("ix_llm_calls_workspace_created", "workspace_id", "created_at"),)
+    __table_args__ = (
+        Index("ix_llm_calls_workspace_created", "workspace_id", "created_at"),
+        Index("ix_llm_calls_call_id", "call_id"),
+    )
 
     workspace_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("workspaces.id", ondelete="CASCADE")
@@ -22,6 +25,11 @@ class LLMCall(Base, UUIDPkMixin, TimestampMixin):
     )
     # No FK yet: step_runs arrives with the workflow engine (phase 5).
     step_run_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    # One gateway invocation = one call_id shared by all its attempts, so the
+    # usage dashboard counts logical calls and fallbacks (phase 8).
+    call_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    # Request/job id from structured logging: joins this row to its log lines.
+    request_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     provider: Mapped[str] = mapped_column(String(50))
     model: Mapped[str] = mapped_column(String(255))
     tier: Mapped[str] = mapped_column(String(20))

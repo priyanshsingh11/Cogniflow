@@ -12,8 +12,11 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import TenantContext, require_role
+from app.api.ratelimit import limit_tool_user
+from app.core.audit import record_audit
 from app.db.postgres import get_pg
 from app.mcp import client, service
+from app.mcp.safety import CommandNotAllowedError
 from app.models import Role
 from app.schemas.mcp import (
     DiscoverOut,
@@ -51,6 +54,7 @@ def _server_out(server) -> ServerOut:
         args=server.args,
         status=server.status,
         last_error=server.last_error,
+        has_credentials=bool(server.credentials_enc),
         created_at=server.created_at,
     )
 
@@ -64,14 +68,32 @@ async def create_server(
     ctx: TenantContext = Depends(require_admin),
     session: AsyncSession = Depends(get_pg),
 ) -> ServerOut:
-    server = await service.create_server(session, ctx.workspace.id, payload)
     try:
-        await session.commit()
+        server = await service.create_server(session, ctx.workspace.id, payload)
+        await session.flush()  # assigns id + surfaces the unique-name conflict
+    except CommandNotAllowedError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except IntegrityError as exc:
         await session.rollback()
         raise HTTPException(
             status_code=409, detail="An MCP server with this name already exists"
         ) from exc
+    record_audit(
+        session,
+        action="mcp.server_registered",
+        actor_id=ctx.user.id,
+        workspace_id=ctx.workspace.id,
+        org_id=ctx.org.id,
+        entity_type="mcp_server",
+        entity_id=server.id,
+        metadata={
+            "name": server.name,
+            "transport": server.transport,
+            "target": server.url_or_command,
+            "has_credentials": bool(server.credentials_enc),
+        },
+    )
+    await session.commit()
     return _server_out(server)
 
 
@@ -111,7 +133,28 @@ async def patch_server(
                 status_code=422,
                 detail="'url' only applies to http servers and must start with http(s)://",
             )
-    return _server_out(await service.update_server(session, server, payload))
+    # Staged first: service.update_server commits, carrying the audit row.
+    record_audit(
+        session,
+        action="mcp.server_updated",
+        actor_id=ctx.user.id,
+        workspace_id=ctx.workspace.id,
+        org_id=ctx.org.id,
+        entity_type="mcp_server",
+        entity_id=server.id,
+        metadata={
+            "name": payload.name,
+            "command": payload.command,
+            "url": payload.url,
+            "credentials_changed": payload.credentials is not None,
+        },
+    )
+    try:
+        return _server_out(await service.update_server(session, server, payload))
+    except CommandNotAllowedError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ValueError as exc:  # bad credentials shape (validated against transport)
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.delete("/servers/{server_id}", status_code=204)
@@ -121,6 +164,17 @@ async def delete_server(
     session: AsyncSession = Depends(get_pg),
 ) -> None:
     server = await _load_server(session, ctx, server_id)
+    # Staged first: service.delete_server commits, carrying the audit row.
+    record_audit(
+        session,
+        action="mcp.server_deleted",
+        actor_id=ctx.user.id,
+        workspace_id=ctx.workspace.id,
+        org_id=ctx.org.id,
+        entity_type="mcp_server",
+        entity_id=server.id,
+        metadata={"name": server.name, "transport": server.transport},
+    )
     await service.delete_server(session, server)
 
 
@@ -168,6 +222,22 @@ async def patch_tool(
     if pair is None:
         raise HTTPException(status_code=404, detail="MCP tool not found")
     tool, server = pair
+    # Staged first: service.update_tool commits, carrying the audit row.
+    record_audit(
+        session,
+        action="mcp.tool_approval_changed",
+        actor_id=ctx.user.id,
+        workspace_id=ctx.workspace.id,
+        org_id=ctx.org.id,
+        entity_type="mcp_tool",
+        entity_id=tool.id,
+        metadata={
+            "tool_name": tool.name,
+            "server_name": server.name,
+            "approved": payload.approved,
+            "requires_approval": payload.requires_approval,
+        },
+    )
     tool = await service.update_tool(session, tool, payload)
     return ToolOut.from_row(tool, server.name)
 
@@ -176,6 +246,7 @@ async def patch_tool(
 async def invoke_tool(
     tool_id: uuid.UUID,
     payload: InvokeIn,
+    _rate_limit: None = Depends(limit_tool_user),
     ctx: TenantContext = Depends(require_member),
     session: AsyncSession = Depends(get_pg),
 ) -> InvokeOut:

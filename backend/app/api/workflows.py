@@ -12,6 +12,7 @@ from app.api.deps import (
     require_member,
     require_viewer,
 )
+from app.core.audit import record_audit
 from app.models.workflow import Workflow, WorkflowStep, WorkflowVersion
 from app.schemas.workflow import (
     WorkflowCreate,
@@ -119,6 +120,16 @@ async def create_workflow(
         session.add(step_row)
 
     wf.current_version_id = version.id
+    record_audit(
+        session,
+        action="workflow.created",
+        actor_id=ctx.user.id,
+        workspace_id=ctx.workspace.id,
+        org_id=ctx.org.id,
+        entity_type="workflow",
+        entity_id=wf.id,
+        metadata={"name": wf.name},
+    )
     await session.commit()
     await session.refresh(wf)
 
@@ -157,10 +168,24 @@ async def update_workflow(
     session: AsyncSession = Depends(get_pg),
 ) -> WorkflowOut:
     wf = await _load_workflow(session, ctx, workflow_id)
+    changes: dict = {}
     if payload.name is not None:
+        changes["name"] = payload.name
         wf.name = payload.name
     if payload.description is not None:
+        changes["description"] = payload.description
         wf.description = payload.description
+    if changes:
+        record_audit(
+            session,
+            action="workflow.updated",
+            actor_id=ctx.user.id,
+            workspace_id=ctx.workspace.id,
+            org_id=ctx.org.id,
+            entity_type="workflow",
+            entity_id=wf.id,
+            metadata=changes,
+        )
 
     try:
         await session.commit()
@@ -181,6 +206,16 @@ async def delete_workflow(
     session: AsyncSession = Depends(get_pg),
 ) -> None:
     wf = await _load_workflow(session, ctx, workflow_id)
+    record_audit(
+        session,
+        action="workflow.deleted",
+        actor_id=ctx.user.id,
+        workspace_id=ctx.workspace.id,
+        org_id=ctx.org.id,
+        entity_type="workflow",
+        entity_id=wf.id,
+        metadata={"name": wf.name},
+    )
     await session.delete(wf)
     await session.commit()
 
@@ -223,6 +258,16 @@ async def create_version(
         session.add(step_row)
 
     wf.current_version_id = version.id
+    record_audit(
+        session,
+        action="workflow.version_created",
+        actor_id=ctx.user.id,
+        workspace_id=ctx.workspace.id,
+        org_id=ctx.org.id,
+        entity_type="workflow",
+        entity_id=wf.id,
+        metadata={"workflow_name": wf.name, "version": next_ver, "steps": len(payload.steps)},
+    )
     await session.commit()
 
     return await _load_version_out(session, version)

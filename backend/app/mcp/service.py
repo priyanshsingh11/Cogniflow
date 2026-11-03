@@ -18,7 +18,7 @@ import jsonschema
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.mcp import client
+from app.mcp import client, safety
 from app.models.mcp import McpServer, McpTool, ToolCall
 
 
@@ -94,15 +94,20 @@ async def create_server(
     session: AsyncSession, workspace_id: uuid.UUID, payload
 ) -> McpServer:
     """Builds and stages the row (unique name enforced by the DB -> 409 at
-    the API edge via IntegrityError)."""
+    the API edge via IntegrityError). Raises safety.CommandNotAllowedError
+    when a stdio command is outside the allowlist."""
+    command = (payload.command or "").strip() if payload.transport == "stdio" else None
+    if command:
+        safety.require_command_allowed(command)
     server = McpServer(
         workspace_id=workspace_id,
         name=payload.name,
         transport=payload.transport,
-        url_or_command=(payload.command or "").strip()
-        if payload.transport == "stdio"
-        else payload.url,
+        url_or_command=command if payload.transport == "stdio" else payload.url,
         args=list(payload.args or []) if payload.transport == "stdio" else None,
+        credentials_enc=(
+            safety.encrypt_credentials(payload.credentials) if payload.credentials else None
+        ),
         status="registered",
     )
     session.add(server)
@@ -111,11 +116,16 @@ async def create_server(
 
 async def update_server(session: AsyncSession, server: McpServer, payload) -> McpServer:
     """Applies the patch; any connection-relevant change resets status to
-    `registered` so the next call must re-discover."""
+    `registered` so the next call must re-discover.
+
+    Credentials (payload.credentials) are re-encrypted in place and never
+    returned by the API — only a `has_credentials` flag. An empty dict
+    clears them."""
     if payload.name is not None:
         server.name = payload.name
     config_changed = False
     if payload.command is not None:
+        safety.require_command_allowed(payload.command.strip())
         server.url_or_command = payload.command.strip()
         config_changed = True
     if payload.args is not None:
@@ -124,6 +134,11 @@ async def update_server(session: AsyncSession, server: McpServer, payload) -> Mc
     if payload.url is not None:
         server.url_or_command = payload.url
         config_changed = True
+    if getattr(payload, "credentials", None) is not None:
+        safety.check_credentials_shape(server.transport, payload.credentials)
+        server.credentials_enc = (
+            safety.encrypt_credentials(payload.credentials) if payload.credentials else None
+        )
     if config_changed:
         server.status = "registered"
         server.last_error = None

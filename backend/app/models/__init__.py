@@ -1,4 +1,5 @@
 from app.models.agent import Agent
+from app.models.audit import AuditLog
 from app.models.base import Base
 from app.models.conversation import Conversation, Message
 from app.models.document import Document, DocumentChunk
@@ -25,6 +26,7 @@ __all__ = [
     "Membership",
     "Workspace",
     "Agent",
+    "AuditLog",
     "LLMCall",
     "Document",
     "DocumentChunk",

@@ -6,6 +6,7 @@ from typing import Any
 from arq.connections import ArqRedis, RedisSettings, create_pool
 
 from app.config import settings
+from app.core.logging import get_request_id
 
 logger = logging.getLogger(__name__)
 
@@ -38,11 +39,19 @@ async def enqueue_job(job_name: str, *args: Any, **kwargs: Any) -> str | None:
     """Queue interface: moves work off the HTTP request onto arq/Redis,
 
     with fallback/inline mode for test environments.
+
+    The caller's request id rides along as a `request_id` kwarg so the worker
+    logs the job under the same id as the API request that queued it.
     """
     if settings.worker_mode == "inline":
         # Tests: nothing consumes the queue. Tests drive `execute_run` directly,
         # and uploads index through FastAPI BackgroundTasks (see api/knowledge.py).
         return f"inline-{uuid.uuid4()}"
+
+    if "request_id" not in kwargs:
+        request_id = get_request_id()
+        if request_id is not None:
+            kwargs["request_id"] = request_id
 
     try:
         pool = await get_arq_pool()

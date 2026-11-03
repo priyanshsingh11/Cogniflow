@@ -294,7 +294,7 @@ def test_mcp_tool_requiring_approval_pauses_workflow_and_resumes(client: TestCli
     # Register and discover refund tool
     s_resp = client.post(
         f"/workspaces/{ws}/mcp/servers",
-        json={"name": "billing", "transport": "stdio", "command": "echo"},
+        json={"name": "billing", "transport": "stdio", "command": "python"},
         headers=alice["headers"],
     ).json()
     client.post(f"/workspaces/{ws}/mcp/servers/{s_resp['id']}/discover", headers=alice["headers"])
@@ -359,7 +359,7 @@ def test_mcp_standalone_invoke_unlocked_with_approval(client: TestClient, fake_m
 
     s_resp = client.post(
         f"/workspaces/{ws}/mcp/servers",
-        json={"name": "billing2", "transport": "stdio", "command": "echo"},
+        json={"name": "billing2", "transport": "stdio", "command": "python"},
         headers=alice["headers"],
     ).json()
     client.post(f"/workspaces/{ws}/mcp/servers/{s_resp['id']}/discover", headers=alice["headers"])

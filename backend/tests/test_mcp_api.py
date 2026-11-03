@@ -398,7 +398,7 @@ def test_invoke_requires_discovery_then_approval(client: TestClient, fake_mcp):
     # Reset status to 'registered' by changing the command -> 409 on invoke.
     client.patch(
         f"/workspaces/{ws}/mcp/servers/{server_id}",
-        json={"command": "other-server.py"},
+        json={"command": "python"},
         headers=user["headers"],
     )
     _invoke(client, user, ws, tool_id, expect=409)

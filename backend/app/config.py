@@ -40,6 +40,19 @@ class Settings(BaseSettings):
     # MCP (phase 4): connect-per-request (no session pool until arq/phase 5).
     mcp_timeout_seconds: int = 30  # connect + discover/invoke budget
     mcp_max_result_bytes: int = 262_144  # stored/returned tool output cap (256 KB)
+    # Phase 8 safety: comma-separated executables a stdio server may launch
+    # (argv[0] basename). Empty = allow any command (dev convenience only).
+    mcp_allowed_commands: str = "python,python3,node,npx,uv,uvx"
+
+    # Rate limits (phase 8): per-user / per-workspace guards on the API itself,
+    # in Redis like the provider limiter. Fail open if Redis is unreachable.
+    rate_limits_enabled: bool = True
+    rl_login_ip_per_5min: int = 10
+    rl_login_email_per_5min: int = 5
+    rl_signup_ip_per_hour: int = 20
+    rl_llm_user_per_min: int = 60  # /llm/chat, agent+coordinator run, ask, chat message
+    rl_tool_user_per_min: int = 60  # MCP tool invoke
+    rl_runs_ws_per_min: int = 30  # workflow run triggers
 
     # Chat message sync (phase 3b): pending Postgres row -> Mongo -> flipped.
     # A reaper retries rows stuck in `pending` (crash between the two writes).

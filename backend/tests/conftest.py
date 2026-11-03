@@ -36,6 +36,14 @@ os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
 # No arq worker in tests: queued jobs run inline, before the HTTP response returns.
 os.environ["WORKER_MODE"] = "inline"
 os.environ["STORAGE_DIR"] = tempfile.mkdtemp(prefix="cogniflow_test_storage_")
+# Phase 8: keep API rate limits out of the way of tests that call endpoints in
+# loops; enforcement itself is tested with a fake Redis and shrunk limits.
+os.environ.setdefault("RL_LOGIN_IP_PER_5MIN", "100000")
+os.environ.setdefault("RL_LOGIN_EMAIL_PER_5MIN", "100000")
+os.environ.setdefault("RL_SIGNUP_IP_PER_HOUR", "100000")
+os.environ.setdefault("RL_LLM_USER_PER_MIN", "100000")
+os.environ.setdefault("RL_TOOL_USER_PER_MIN", "100000")
+os.environ.setdefault("RL_RUNS_WS_PER_MIN", "100000")
 
 
 async def _ensure_database() -> None:
@@ -57,7 +65,7 @@ async def _truncate_all() -> None:
                 "TRUNCATE users, organizations, memberships, workspaces, agents, "
                 "llm_calls, documents, document_chunks, conversations, messages, "
                 "mcp_servers, mcp_tools, tool_calls, workflows, workflow_versions, "
-                "workflow_steps, workflow_runs, step_runs, approvals CASCADE"
+                "workflow_steps, workflow_runs, step_runs, approvals, audit_logs CASCADE"
             )
         )
     # Connections are bound to the event loop that created them; tests use

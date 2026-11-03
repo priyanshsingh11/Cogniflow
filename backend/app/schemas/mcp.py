@@ -1,12 +1,16 @@
 """Schemas for MCP servers, tools, discovery and invocation (phase 4)."""
 
+import json
 import uuid
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
+from app.mcp.safety import check_credentials_shape
+
 _NAME_PATTERN = r"^[a-zA-Z0-9_\- ]+$"
+_CREDENTIALS_MAX_BYTES = 4_096
 
 
 class ServerCreate(BaseModel):
@@ -15,6 +19,7 @@ class ServerCreate(BaseModel):
     command: str | None = None  # stdio: executable
     args: list[str] | None = Field(default=None, max_length=64)  # stdio: argv
     url: str | None = None  # http: endpoint
+    credentials: dict[str, Any] | None = None  # write-only, encrypted at rest
 
     @model_validator(mode="after")
     def _check_config(self) -> "ServerCreate":
@@ -27,6 +32,11 @@ class ServerCreate(BaseModel):
                 raise ValueError("http servers need a valid 'url' starting with http(s)://")
             self.command = None
             self.args = None
+        check_credentials_shape(self.transport, self.credentials)
+        if self.credentials is not None and len(json.dumps(self.credentials)) > (
+            _CREDENTIALS_MAX_BYTES
+        ):
+            raise ValueError("credentials too large")
         return self
 
 
@@ -35,10 +45,14 @@ class ServerPatch(BaseModel):
     command: str | None = None
     args: list[str] | None = Field(default=None, max_length=64)
     url: str | None = None
+    credentials: dict[str, Any] | None = None  # None = keep, {} = clear
 
     @model_validator(mode="after")
     def _something_to_update(self) -> "ServerPatch":
-        if all(v is None for v in (self.name, self.command, self.args, self.url)):
+        if all(
+            v is None
+            for v in (self.name, self.command, self.args, self.url, self.credentials)
+        ):
             raise ValueError("nothing to update")
         return self
 
@@ -51,6 +65,7 @@ class ServerOut(BaseModel):
     args: list[str] | None = None
     status: str  # registered | connected | error
     last_error: str | None = None
+    has_credentials: bool = False  # secrets are never returned
     created_at: datetime
 
 

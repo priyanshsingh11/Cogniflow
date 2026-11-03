@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import TenantContext, require_role, require_workspace
+from app.core.audit import record_audit
 from app.db.postgres import get_pg
 from app.models import Role
 from app.schemas.org import WorkspaceOut
@@ -44,6 +45,20 @@ async def delete_workspace(
     session: AsyncSession = Depends(get_pg),
 ) -> None:
     """Admin+ of the owning org may delete a workspace."""
+    # Audit first: workspace_id becomes NULL on delete (SET NULL), the org
+    # link and metadata keep the event visible and attributable. Flush the
+    # row before the DELETE so the insert never races the FK constraint.
+    record_audit(
+        session,
+        action="workspace.deleted",
+        actor_id=ctx.user.id,
+        workspace_id=ctx.workspace.id,
+        org_id=ctx.org.id,
+        entity_type="workspace",
+        entity_id=ctx.workspace.id,
+        metadata={"name": ctx.workspace.name, "workspace_id": str(ctx.workspace.id)},
+    )
+    await session.flush()
     await session.delete(ctx.workspace)
     await session.commit()
 
@@ -55,7 +70,18 @@ async def rename_workspace(
     session: AsyncSession = Depends(get_pg),
 ) -> WorkspaceOut:
     """Member+ may rename; viewers get 403. Demonstrates require_role(MEMBER)."""
+    old_name = ctx.workspace.name
     ctx.workspace.name = payload.name.strip()
+    record_audit(
+        session,
+        action="workspace.renamed",
+        actor_id=ctx.user.id,
+        workspace_id=ctx.workspace.id,
+        org_id=ctx.org.id,
+        entity_type="workspace",
+        entity_id=ctx.workspace.id,
+        metadata={"from": old_name, "to": ctx.workspace.name},
+    )
     await session.commit()
     return WorkspaceOut(
         id=ctx.workspace.id,

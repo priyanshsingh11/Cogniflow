@@ -14,7 +14,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import TenantContext, require_role
+from app.api.ratelimit import limit_llm_user
 from app.config import settings
+from app.core.audit import record_audit
 from app.db.postgres import get_pg
 from app.llm.deps import get_gateway
 from app.llm.errors import AllModelsFailedError
@@ -138,7 +140,20 @@ async def delete_document_endpoint(
     document = await get_document(session, ctx.workspace.id, document_id)
     if document is None:
         raise HTTPException(status_code=404, detail="Document not found")
-    await delete_document(document.id)
+    filename, size_bytes = document.filename, document.size_bytes
+    deleted = await delete_document(document.id)
+    if deleted:
+        record_audit(
+            session,
+            action="document.deleted",
+            actor_id=ctx.user.id,
+            workspace_id=ctx.workspace.id,
+            org_id=ctx.org.id,
+            entity_type="document",
+            entity_id=document_id,
+            metadata={"filename": filename, "size_bytes": size_bytes},
+        )
+        await session.commit()
 
 
 # ----------------------------------------------------------- search and ask
@@ -160,6 +175,7 @@ async def search_knowledge(
 @router.post("/knowledge/ask", response_model=AskOut)
 async def ask_knowledge(
     payload: AskIn,
+    _rate_limit: None = Depends(limit_llm_user),
     ctx: TenantContext = Depends(require_member),
     session: AsyncSession = Depends(get_pg),
     gateway: LLMGateway = Depends(get_gateway),

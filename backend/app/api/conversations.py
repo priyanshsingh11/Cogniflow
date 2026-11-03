@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import TenantContext, require_role
+from app.api.ratelimit import limit_llm_user
 from app.chat import service
 from app.db.postgres import get_pg
 from app.llm.deps import get_gateway
@@ -67,6 +68,7 @@ async def get_conversation(
 async def post_message(
     conversation_id: uuid.UUID,
     payload: MessageIn,
+    _rate_limit: None = Depends(limit_llm_user),
     ctx: TenantContext = Depends(require_member),
     session: AsyncSession = Depends(get_pg),
     gateway: LLMGateway = Depends(get_gateway),
