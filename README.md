@@ -42,11 +42,11 @@ It is **not a chatbot wrapper**. The goal is to demonstrate backend and system-d
 | **Workflows** | Versioned workflows of ordered steps (`llm`, `knowledge_search`, `mcp_tool`, `condition`, `agent`, `coordinator`, `approval`) with `{{...}}` templating between steps. Runs execute in a background **arq worker**; every run and step run is a Postgres row with status, input, output, error and timing |
 | **Reliability** | Per-step timeout and retries with backoff, idempotency keys (a repeated trigger returns the same run), step leases so two workers never execute one step, resume from the first unfinished step, and a reaper that recovers expired leases and runs whose enqueue was lost |
 | **Human approval** | An `approval` step (or an MCP tool flagged `requires_approval`) pauses the run as `waiting_approval` and creates an approval request; a member approves to resume or rejects to fail the run |
-| **Observability (partial)** | Every model attempt, including failures and rate-limit skips, is stored in `llm_calls` with tier, routing reason, tokens, latency and agent |
+| **Observability and safety** | Every model attempt is stored in `llm_calls` (tier, routing reason, tokens, latency, agent, `call_id` grouping the attempts of one call, `request_id`). Append-only **audit log** of sign-ins, member/workspace/workflow/run/MCP/approval changes; **usage dashboard API** (calls, tokens, cost, fallbacks, errors, slowest steps, daily series); Redis **API rate limits** (login, signup, LLM-costing routes, tool invokes, run triggers); `X-Request-ID` on every response; Prometheus-style `/metrics`; encrypted MCP server credentials and a stdio command allowlist. Backend only: no UI yet |
 | **Frontend** | Next.js app: landing page with live backend/DB health, signup, login, dashboard, and a workspace area with **Documents** (upload, live indexing status, delete), **Chat** (cited answers with expandable source passages, history), a **Workflow editor** (form-based step list: add, reorder, remove, per-type settings, retries/timeouts, saves as a new version; run with a JSON input), **Runs** (live status, per-step input/output/error/timing, cancel) and an **Approval inbox** (approve or reject paused runs) |
-| **Quality** | 139 automated tests against a real Postgres (plus Mongo message tests), CI on GitHub Actions |
+| **Quality** | 200 automated tests (190 pass, 10 currently fail, see Testing) against a real Postgres (plus Mongo message tests), CI on GitHub Actions |
 
-**Planned (not built yet):** scheduled triggers, evaluation, visual workflow editor, deployment. See [Roadmap](#roadmap).
+**Planned (not built yet):** scheduled triggers, evaluation, usage/audit screens in the frontend, visual workflow editor, deployment. See [Roadmap](#roadmap).
 
 ---
 
@@ -83,7 +83,7 @@ flowchart LR
 | Store | Responsibility | Today |
 |---|---|---|
 | **PostgreSQL** (+ pgvector) | Source of truth: users, orgs, workspaces, agents, runs, approvals, usage, audit, embeddings | In use |
-| **Redis** | Rate-limit counters now; job queue and locks later. Always rebuildable from Postgres | In use (rate limiter) |
+| **Redis** | Rate-limit counters and the arq job queue. Always rebuildable from Postgres | In use (rate limits, queue) |
 | **MongoDB** | Flexible AI data only: conversation messages, agent memory, step traces. References Postgres UUIDs, never the reverse | In use: chat messages |
 
 Cross-database rule (**implemented** for chat messages): write the Postgres staging row first as `pending`, then the Mongo document (`_id` = message UUID, so retries are idempotent), then flip to `synced` and null the staged payload; a reaper retries rows stuck in `pending` and gives up after 3 attempts. No cross-database joins.
@@ -178,7 +178,11 @@ Authoritative diagram: [`db-schema.mmd`](db-schema.mmd) (Mermaid ER diagram of t
 | `step_runs` | One row per step per run: attempt, status, input/output, error, lease owner and expiry |
 | `approvals` | Pending/approved/rejected human decisions tied to a run and step |
 
-**Planned tables:** audit logs, evaluation datasets/cases/runs/results.
+| `audit_logs` | Append-only trail: actor, action (e.g. `workflow.updated`, `auth.login_failed`), entity, metadata; workspace/org/actor ids are `SET NULL` on delete so the trail outlives tenants |
+
+`llm_calls` also gained `call_id` and `request_id`, and `mcp_servers` gained `credentials_enc` (migration `0007`).
+
+**Planned tables:** evaluation datasets/cases/runs/results.
 
 ---
 
@@ -189,6 +193,7 @@ Interactive docs at `/docs` (Swagger) and `/redoc` when the backend is running. 
 | Method | Path | Min. role | Description |
 |---|---|---|---|
 | GET | `/health`, `/health/deps` | none | Liveness; Postgres/Mongo/Redis reachability |
+| GET | `/metrics` | none | Prometheus text: HTTP counts by status class, rate-limit rejections, runs and model attempts by status, queue depth (global aggregates, no tenant ids) |
 | POST | `/auth/signup` | none | Create user + personal org + Default workspace; returns a token |
 | POST | `/auth/login` | none | Returns a token |
 | GET | `/auth/me` | any | Current user |
@@ -232,6 +237,12 @@ Interactive docs at `/docs` (Swagger) and `/redoc` when the backend is running. 
 | GET | `/workspaces/{id}/approvals`, `/workspaces/{id}/approvals/{aid}` | viewer | List / read approval requests |
 | POST | `/workspaces/{id}/approvals/{aid}/decide` | member | `{action: approve|reject, reason?}`; approve resumes the run, reject fails it |
 
+| GET | `/workspaces/{id}/usage` | viewer | Usage and cost report: totals, per-tier/model/agent breakdowns, daily series, recent errors, slowest steps/workflows (`days` window) |
+| GET | `/workspaces/{id}/audit-logs` | admin | Workspace audit trail (`action`, `actor_id`, `limit`, `offset`) |
+| GET | `/organizations/{org_id}/audit-logs` | admin | Org-wide trail incl. member sign-ins (`scope=all|account`) |
+
+Rate-limited routes return 429: login (per IP and per email), signup (per IP), LLM-costing routes (per user), MCP tool invoke (per user), run triggers (per workspace). Limits fail open if Redis is down.
+
 Role order: `owner > admin > member > viewer`. Wrong tenant → 404. Insufficient role → 403.
 
 ---
@@ -252,7 +263,7 @@ Cogniflow/
 │   │   ├── storage/         StorageBackend protocol + local-folder implementation (R2 later)
 │   │   ├── models/          SQLAlchemy models
 │   │   ├── schemas/         Pydantic request/response models
-│   │   ├── core/            Password hashing, JWT
+│   │   ├── core/            Password hashing, JWT, audit recording, API rate limiter, process metrics, logging
 │   │   └── db/              Postgres, Mongo, Redis clients
 │   ├── alembic/versions/    Migrations
 │   └── tests/               Unit + API tests (fake LLM provider, real Postgres)
@@ -334,6 +345,10 @@ Backend settings come from environment variables or `backend/.env` (see [`.env.e
 | `EMBEDDING_MODEL` | `all-MiniLM-L6-v2` | fastembed model (~100 MB, downloaded once) |
 | `MAX_UPLOAD_MB` | 5 | Upload size cap |
 | `MCP_TIMEOUT_SECONDS`, `MCP_MAX_RESULT_BYTES` | 30 / 262144 | Connect+call budget and stored/returned tool output cap |
+| `MCP_ALLOWED_COMMANDS` | `python,python3,node,npx,uv,uvx` | Executables a stdio MCP server may launch (empty = any, dev only) |
+| `RATE_LIMITS_ENABLED` | true | Master switch for API rate limits |
+| `RL_LOGIN_IP_PER_5MIN`, `RL_LOGIN_EMAIL_PER_5MIN`, `RL_SIGNUP_IP_PER_HOUR` | 10 / 5 / 20 | Auth limits |
+| `RL_LLM_USER_PER_MIN`, `RL_TOOL_USER_PER_MIN`, `RL_RUNS_WS_PER_MIN` | 60 / 60 / 30 | LLM routes and tool invokes per user; run triggers per workspace |
 | `WORKER_MODE` | `arq` | `arq` queues to Redis; `inline` (tests) queues nothing |
 | `STEP_DEFAULT_TIMEOUT_SECONDS`, `STEP_LEASE_DURATION_SECONDS` | 60 / 120 | Per-step timeout default; how long a worker owns a step |
 | `WORKFLOW_REAPER_INTERVAL_SECONDS`, `WORKFLOW_REAPER_STUCK_SECONDS`, `WORKFLOW_REAPER_MAX_ATTEMPTS` | 60 / 120 / 3 | Stuck-run recovery |
@@ -352,7 +367,7 @@ Never commit `.env` files. They are git-ignored.
 docker compose up -d                      # tests need the Postgres container
 cd backend
 uv run ruff check .                       # lint
-uv run pytest                             # 103 tests
+uv run pytest                             # 200 tests (190 pass, 3 skipped live, 10 failing: see below)
 RUN_LIVE_LLM=1 uv run pytest tests/test_llm_live.py -s   # optional: real provider smoke test
 RUN_LIVE_EMBED=1 uv run pytest tests/test_embed_live.py  # optional: downloads the real embedding model
 cd ../frontend && npm run lint && npm run build
@@ -361,6 +376,8 @@ cd ../frontend && npm run lint && npm run build
 - **Real Postgres, real migrations:** tests run against a dedicated `cogniflow_test` database created from the actual Alembic migrations (including the pgvector extension), not SQLite.
 - **Deterministic LLM tests:** a scripted `FakeProvider` simulates rate limits, timeouts, bad output and failures, so routing, fallback, escalation, the tool loop and the coordinator are all tested without network or API keys. Embeddings come from a fake embedder in tests, so CI never downloads the model.
 - **What is covered:** auth, tenant isolation, role enforcement, gateway behaviours (fallback, retry, escalation, attempt cap, pins, local rate limiting), the tool loop (unknown tool, missing args, approval refusal, step limit), the coordinator, `llm_calls` recording, document parsing/chunking/upload rules, vector search, cited answers, agent `knowledge_search`, conversations, Mongo-backed history and the two-phase message recovery (reaper) paths.
+- **Phase 8 coverage:** audit rows, rate limits (login/signup/LLM/tool/runs, fail-open, disable switch), request IDs, usage aggregation and scoping.
+- **Known failing (10):** 4 in `test_rate_limits.py` (test helper `_signup` returns a dict where the tests expect a response object, plus a fake request without `.client.host`) and 6 in `test_usage_api.py` (`MissingGreenlet` from async SQLAlchemy). The CI backend job fails until fixed.
 - **CI:** GitHub Actions runs backend lint + tests (with a pgvector service) and frontend lint + build on every push and pull request.
 
 ---
@@ -390,10 +407,12 @@ cd ../frontend && npm run lint && npm run build
 
 - Passwords hashed with bcrypt; JWT (HS256) access tokens with expiry.
 - Role-based access per organization; tenant scoping on every workspace route; agent ids are checked against the caller's workspace.
-- Prompt-injection posture: tool output and retrieved text are treated as data; tools needing approval are blocked until the approval flow exists.
+- Prompt-injection posture: tool output and retrieved text are treated as data; tools flagged `requires_approval` pause the run for a human decision.
+- MCP server credentials are encrypted at rest (key derived from `JWT_SECRET`, so rotating it invalidates them) and stdio servers may only launch allowlisted commands.
+- Sensitive actions are written to the append-only audit log (admin-readable).
 - Hard caps on agent steps, planner steps and total model attempts.
 - Secrets live in git-ignored `.env` files. API keys are never logged or returned.
-- Known gap: the frontend currently stores the token in `localStorage` (a deliberate trade-off for the MVP; httpOnly cookies are a possible hardening step). No rate limiting on auth endpoints yet.
+- Known gap: the frontend currently stores the token in `localStorage` (a deliberate trade-off for the MVP; httpOnly cookies are a possible hardening step). Auth endpoints are rate limited per IP and per email (Redis; fails open if Redis is down).
 
 ---
 
@@ -409,7 +428,7 @@ cd ../frontend && npm run lint && npm run build
 | 5 | Workflow engine: workflow API, LangGraph executor on arq, retries, timeouts, idempotency, resume | ✅ Done (backend) |
 | 6 | Human approval: pause/resume runs | ✅ Done (backend) |
 | 7 | Frontend MVP: upload and chat, workflow editor, run history, approval inbox | ✅ Done |
-| 8 | Observability and safety: audit logs, rate limits, usage dashboard | ⬜ |
+| 8 | Observability and safety: audit logs, rate limits, usage dashboard | ✅ Done (backend; 10 tests failing, no UI) |
 | 9 | Evaluation: datasets, cases, runs, scores | ⬜ |
 | 10 | Visual builder (React Flow), multi-agent extras, schedule/webhook triggers | ⬜ |
 | 11 | Deploy and polish: free PaaS + Neon + Atlas, CI/CD, demo | ⬜ |
@@ -428,6 +447,7 @@ MVP target = phases 0–7 (matches [OVERVIEW](OVERVIEW)).
 - MCP: one connection per request (no session pool). A `stdio` server runs a command **on the API host**, so registering one is admin-only and is not safe for untrusted admins; before deploying publicly, restrict allowed commands. Server credentials/env are not stored yet (no secret handling), so servers needing tokens (e.g. GitHub) are not usable until that is decided. Tools needing approval stay refused until Phase 6.
 - Document indexing and the workflow reaper run on the arq worker (the chat reaper also still runs in-process); without a worker running (or if Redis is down) enqueueing falls back to in-process execution.
 - Workflows: steps run sequentially (no parallel branches or loops), no schedule/webhook triggers yet, and no UI (phase 7). Retried steps with side effects (e.g. MCP calls) are re-executed.
+- Usage dashboard and audit log have API only (no frontend screens). `/metrics` counters are per process and the endpoint is unauthenticated.
 - Chunks are re-embedded with the stored model only — changing `EMBEDDING_MODEL` needs a re-upload (no version field yet).
 
 ---
