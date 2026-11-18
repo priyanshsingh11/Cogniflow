@@ -53,6 +53,8 @@ class Settings(BaseSettings):
     rl_llm_user_per_min: int = 60  # /llm/chat, agent+coordinator run, ask, chat message
     rl_tool_user_per_min: int = 60  # MCP tool invoke
     rl_runs_ws_per_min: int = 30  # workflow run triggers
+    rl_webhook_per_min: int = 60  # inbound webhook calls per trigger
+    rl_webhook_ip_per_min: int = 120  # per caller IP (throttles token guessing)
 
     # Chat message sync (phase 3b): pending Postgres row -> Mongo -> flipped.
     # A reaper retries rows stuck in `pending` (crash between the two writes).

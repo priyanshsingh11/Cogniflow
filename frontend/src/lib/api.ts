@@ -19,6 +19,7 @@ import type {
   McpToolCall,
   OrgMember,
   Passage,
+  WorkflowTrigger,
   Approval,
   AuditLog,
   ChatMessage,
@@ -37,7 +38,7 @@ import type {
   UsageReport,
 } from "@/types";
 
-const API_BASE_URL =
+export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8001";
 
 export class ApiError extends Error {
@@ -393,4 +394,33 @@ export function deleteWorkspace(workspaceId: string): Promise<void> {
 }
 export function deleteWorkflow(workspaceId: string, workflowId: string): Promise<void> {
   return apiFetch<void>(`${ws(workspaceId)}/workflows/${workflowId}`, { method: "DELETE" });
+}
+
+// ---- Triggers (phase 10) ----
+
+const trig = (ws_: string, wf: string) => `/workspaces/${ws_}/workflows/${wf}/triggers`;
+
+export function listTriggers(workspaceId: string, workflowId: string): Promise<WorkflowTrigger[]> {
+  return apiFetch<WorkflowTrigger[]>(trig(workspaceId, workflowId));
+}
+export function createTrigger(
+  workspaceId: string,
+  workflowId: string,
+  payload: { type: "schedule" | "webhook"; cron?: string; timezone?: string; input?: Record<string, unknown> },
+): Promise<WorkflowTrigger> {
+  return apiFetch<WorkflowTrigger>(trig(workspaceId, workflowId), json("POST", payload));
+}
+export function updateTrigger(
+  workspaceId: string,
+  workflowId: string,
+  id: string,
+  payload: { enabled?: boolean; cron?: string; timezone?: string; input?: Record<string, unknown> },
+): Promise<WorkflowTrigger> {
+  return apiFetch<WorkflowTrigger>(`${trig(workspaceId, workflowId)}/${id}`, json("PATCH", payload));
+}
+export function rotateTrigger(workspaceId: string, workflowId: string, id: string): Promise<WorkflowTrigger> {
+  return apiFetch<WorkflowTrigger>(`${trig(workspaceId, workflowId)}/${id}/rotate`, { method: "POST" });
+}
+export function deleteTrigger(workspaceId: string, workflowId: string, id: string): Promise<void> {
+  return apiFetch<void>(`${trig(workspaceId, workflowId)}/${id}`, { method: "DELETE" });
 }

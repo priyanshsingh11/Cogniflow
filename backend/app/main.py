@@ -17,6 +17,7 @@ from app.api import (
     metrics,
     organizations,
     runs,
+    triggers,
     usage,
     workflows,
     workspaces,
@@ -86,3 +87,5 @@ app.include_router(mcp.router)
 app.include_router(workflows.router)
 app.include_router(runs.router)
 app.include_router(approvals.router)
+app.include_router(triggers.router)
+app.include_router(triggers.hooks_router)

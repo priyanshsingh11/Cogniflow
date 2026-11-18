@@ -163,6 +163,7 @@ export interface StepRun {
 
 export interface WorkflowRun {
   id: string;
+  trigger_id?: string | null;
   workflow_id: string;
   workflow_version_id: string;
   status: RunStatus;
@@ -390,4 +391,20 @@ export interface AskResult {
   citations: Passage[];
   tier: string;
   route_reason: string;
+}
+
+export interface WorkflowTrigger {
+  id: string;
+  workflow_id: string;
+  type: "schedule" | "webhook";
+  enabled: boolean;
+  cron: string | null;
+  timezone: string;
+  input: Record<string, unknown>;
+  next_run_at: string | null;
+  last_run_at: string | null;
+  secret_prefix: string | null;
+  secret: string | null;
+  webhook_path: string | null;
+  created_at: string;
 }

@@ -4,6 +4,7 @@ from arq.cron import cron
 from app.config import settings
 from app.worker.tasks import (
     execute_workflow_run,
+    fire_due_triggers,
     process_document,
     reap_stuck_messages,
     reap_stuck_runs,
@@ -24,10 +25,12 @@ class WorkerSettings:
         process_document,
         reap_stuck_messages,
         reap_stuck_runs,
+        fire_due_triggers,
     ]
     cron_jobs = [
         cron(reap_stuck_messages, second={0, 30}),
         cron(reap_stuck_runs, second={15, 45}),
+        cron(fire_due_triggers, second={5}),  # once a minute
     ]
     redis_settings = RedisSettings.from_dsn(settings.redis_url)
     on_startup = startup

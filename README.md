@@ -46,7 +46,9 @@ It is **not a chatbot wrapper**. The goal is to demonstrate backend and system-d
 | **Frontend** | Next.js app: landing page with live backend/DB health, signup, login, dashboard, and a workspace area with **Documents** (upload, live indexing status, delete), **Chat** (cited answers with expandable source passages, history), a **Workflow editor** (form-based step list: add, reorder, remove, per-type settings, retries/timeouts, saves as a new version; run with a JSON input), **Runs** (live status, per-step input/output/error/timing, cancel) an **Approval inbox** (approve or reject paused runs), a **Usage** page (calls, tokens, cost, fallback/failure rates, latency, per-tier/model/agent tables, slowest steps, recent errors; 24 h to 90 d) and an **Audit log** page (admin-only, action filter, paging) |
 | **Quality** | 200 automated tests passing against a real Postgres (plus 3 opt-in live tests) against a real Postgres (plus Mongo message tests), CI on GitHub Actions |
 
-**Planned (not built yet):** scheduled triggers, evaluation, visual workflow editor, deployment. See [Roadmap](#roadmap).
+**Triggers:** a workflow can start on a cron schedule or from an inbound webhook (`POST /hooks/<secret>`); manage them under *Workflows → a workflow → Triggers*. Schedules are evaluated by the arq worker once a minute (cron in a chosen timezone, one catch-up run after downtime); webhook secrets are shown once and stored only as a SHA-256 hash. Runs started this way have `triggered_by = null` and a `trigger_id`.
+
+**Planned (not built yet):** evaluation, visual workflow editor, deployment. See [Roadmap](#roadmap).
 
 ---
 
@@ -234,6 +236,10 @@ Interactive docs at `/docs` (Swagger) and `/redoc` when the backend is running. 
 | POST, GET | `/workspaces/{id}/workflows/{wid}/runs` | member / viewer | Trigger a run (optional `idempotency_key`; returns immediately, `queued`) / list its runs |
 | GET | `/workspaces/{id}/runs`, `/workspaces/{id}/runs/{rid}` | viewer | List runs / one run with its step runs |
 | POST | `/workspaces/{id}/runs/{rid}/cancel` | member | Cancel a run |
+| GET, POST | `/workspaces/{id}/workflows/{wid}/triggers` | viewer / admin | List / create a `schedule` (cron + timezone + default input) or `webhook` trigger; a webhook's secret is returned once |
+| PATCH, DELETE | `/workspaces/{id}/workflows/{wid}/triggers/{tid}` | admin | Pause/resume or edit / delete a trigger |
+| POST | `/workspaces/{id}/workflows/{wid}/triggers/{tid}/rotate` | admin | New webhook secret (old URL dies) |
+| POST | `/hooks/{secret}` | public (secret in URL) | Start the workflow; JSON body becomes the run input; optional `Idempotency-Key` header; 202 |
 | GET | `/workspaces/{id}/approvals`, `/workspaces/{id}/approvals/{aid}` | viewer | List / read approval requests |
 | POST | `/workspaces/{id}/approvals/{aid}/decide` | member | `{action: approve|reject, reason?}`; approve resumes the run, reject fails it |
 
@@ -429,7 +435,7 @@ cd ../frontend && npm run lint && npm run build
 | 7 | Frontend MVP: upload and chat, workflow editor, run history, approval inbox | ✅ Done |
 | 8 | Observability and safety: audit logs, rate limits, usage dashboard | ✅ Done |
 | 9 | Evaluation: datasets, cases, runs, scores | ⬜ |
-| 10 | Visual builder (React Flow), multi-agent extras, schedule/webhook triggers | ⬜ |
+| 10 | Visual builder (React Flow), multi-agent extras, schedule/webhook triggers | 🟡 Triggers done; builder and parallel/loop steps pending |
 | 11 | Deploy and polish: free PaaS + Neon + Atlas, CI/CD, demo | ⬜ |
 
 MVP target = phases 0–7 (matches [OVERVIEW](OVERVIEW)).
@@ -445,7 +451,7 @@ MVP target = phases 0–7 (matches [OVERVIEW](OVERVIEW)).
 - RAG limits: 5 MB per file, `.txt`/`.md`/`.pdf` only (no OCR or DOCX), English-leaning embedding model, single shared model per deployment.
 - MCP: one connection per request (no session pool). A `stdio` server runs a command **on the API host**, so registering one is admin-only and is not safe for untrusted admins; before deploying publicly, restrict allowed commands. Server credentials/env are not stored yet (no secret handling), so servers needing tokens (e.g. GitHub) are not usable until that is decided. Tools needing approval stay refused until Phase 6.
 - Document indexing and the workflow reaper run on the arq worker (the chat reaper also still runs in-process); without a worker running (or if Redis is down) enqueueing falls back to in-process execution.
-- Workflows: steps run sequentially (no parallel branches or loops), no schedule/webhook triggers yet, and no UI (phase 7). Retried steps with side effects (e.g. MCP calls) are re-executed.
+- Workflows: steps run sequentially (no parallel branches or loops), triggers are UTC-minute granularity (cron, 5 fields). Retried steps with side effects (e.g. MCP calls) are re-executed.
 - `/metrics` counters are per process and the endpoint is unauthenticated.
 - Chunks are re-embedded with the stored model only — changing `EMBEDDING_MODEL` needs a re-upload (no version field yet).
 

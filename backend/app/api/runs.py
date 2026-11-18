@@ -61,6 +61,7 @@ async def _load_run_out(session: AsyncSession, run: WorkflowRun) -> WorkflowRunO
         workspace_id=run.workspace_id,
         conversation_id=run.conversation_id,
         triggered_by=run.triggered_by,
+        trigger_id=run.trigger_id,
         status=run.status,
         idempotency_key=run.idempotency_key,
         queue_job_id=run.queue_job_id,

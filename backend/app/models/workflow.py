@@ -96,6 +96,9 @@ class WorkflowRun(Base, UUIDPkMixin, TimestampMixin):
     triggered_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
+    trigger_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("workflow_triggers.id", ondelete="SET NULL"), nullable=True
+    )  # set when a schedule/webhook (not a person) started the run
     status: Mapped[str] = mapped_column(
         String(30), default="queued"
     )  # queued | running | waiting_approval | succeeded | failed | cancelled

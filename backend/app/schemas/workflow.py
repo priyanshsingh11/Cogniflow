@@ -112,6 +112,7 @@ class WorkflowRunOut(BaseModel):
     workspace_id: uuid.UUID
     conversation_id: uuid.UUID | None = None
     triggered_by: uuid.UUID | None = None
+    trigger_id: uuid.UUID | None = None
     status: str
     idempotency_key: str | None = None
     queue_job_id: str | None = None

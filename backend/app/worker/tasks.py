@@ -7,6 +7,7 @@ from app.core.logging import reset_request_id, set_request_id
 from app.rag.service import process_document as run_process_document
 from app.workflows.executor import execute_run
 from app.workflows.reaper import reap_stuck_runs as run_stuck_runs_reaper
+from app.workflows.triggers import fire_due_triggers as run_due_triggers
 
 logger = logging.getLogger(__name__)
 
@@ -65,5 +66,16 @@ async def reap_stuck_runs(
     try:
         logger.info("Running workflow run lease reaper task")
         return await run_stuck_runs_reaper()
+    finally:
+        reset_request_id(token)
+
+
+async def fire_due_triggers(
+    ctx: dict[str, Any] | None = None, request_id: str | None = None
+) -> int:
+    """Start workflows whose schedule trigger is due (phase 10)."""
+    token = _begin_job(request_id)
+    try:
+        return await run_due_triggers()
     finally:
         reset_request_id(token)

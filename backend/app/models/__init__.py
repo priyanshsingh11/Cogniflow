@@ -7,6 +7,7 @@ from app.models.enums import Role
 from app.models.llm_call import LLMCall
 from app.models.mcp import McpServer, McpTool, ToolCall
 from app.models.organization import Membership, Organization
+from app.models.trigger import WorkflowTrigger
 from app.models.user import User
 from app.models.workflow import (
     Approval,
@@ -37,6 +38,7 @@ __all__ = [
     "ToolCall",
     "Workflow",
     "WorkflowVersion",
+    "WorkflowTrigger",
     "WorkflowStep",
     "WorkflowRun",
     "StepRun",

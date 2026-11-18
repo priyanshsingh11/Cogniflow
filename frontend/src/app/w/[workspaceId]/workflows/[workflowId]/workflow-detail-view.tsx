@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { ApiError, createWorkflowVersion, getWorkflow, triggerRun } from "@/lib/api";
 import type { Workflow } from "@/types";
 import { WorkflowEditor } from "../workflow-editor";
+import { TriggersPanel } from "./triggers-panel";
 
 export function WorkflowDetailView() {
   const { workspaceId, workflowId } = useParams<{ workspaceId: string; workflowId: string }>();
@@ -82,6 +83,8 @@ export function WorkflowDetailView() {
           {error && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{error}</p>}
         </div>
       </section>
+
+      <TriggersPanel workspaceId={workspaceId} workflowId={workflowId} />
 
       <h2 className="mt-8 text-sm font-semibold uppercase tracking-widest text-zinc-500 dark:text-zinc-400">
         Steps (version {version?.version})

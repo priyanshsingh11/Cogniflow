@@ -65,7 +65,8 @@ async def _truncate_all() -> None:
                 "TRUNCATE users, organizations, memberships, workspaces, agents, "
                 "llm_calls, documents, document_chunks, conversations, messages, "
                 "mcp_servers, mcp_tools, tool_calls, workflows, workflow_versions, "
-                "workflow_steps, workflow_runs, step_runs, approvals, audit_logs CASCADE"
+                "workflow_steps, workflow_runs, step_runs, approvals, audit_logs, "
+                "workflow_triggers CASCADE"
             )
         )
     # Connections are bound to the event loop that created them; tests use
