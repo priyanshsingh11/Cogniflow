@@ -298,3 +298,96 @@ export interface AuditLog {
   metadata: Record<string, unknown>;
   created_at: string;
 }
+
+// ---- Agents, coordinator and MCP management ----
+
+export const AGENT_ROLES = ["research", "analysis", "writing", "review", "custom"] as const;
+export const TIERS = ["small", "medium", "large"] as const;
+
+export interface Agent {
+  id: string;
+  name: string;
+  role: string;
+  system_prompt: string;
+  tier_pin: string | null;
+  model_pin: string | null;
+  params: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface AgentInput {
+  name: string;
+  role: string;
+  system_prompt: string;
+  tier_pin: string | null;
+  model_pin: string | null;
+}
+
+export interface AgentRunResult {
+  output: string;
+  status: string;
+  steps: { kind: string; tool: string; arguments: Record<string, unknown>; result: string }[];
+  models_used: string[];
+  llm_calls: number;
+}
+
+export interface CoordinatorResult {
+  status: string;
+  plan: { role: string; task: string }[];
+  steps: { role: string; task: string; agent: string; status: string; output: string }[];
+  final: string;
+  llm_calls: number;
+}
+
+export interface McpServer {
+  id: string;
+  name: string;
+  transport: "stdio" | "http";
+  url_or_command: string;
+  args: string[] | null;
+  status: string;
+  last_error: string | null;
+  has_credentials: boolean;
+  created_at: string;
+}
+
+export interface McpTool extends McpToolSummary {
+  server_id: string;
+  input_schema: Record<string, unknown>;
+}
+
+export interface McpToolCall {
+  id: string;
+  tool_id: string;
+  tool_name: string;
+  invoked_by: string;
+  agent_id: string | null;
+  arguments: Record<string, unknown> | null;
+  result: Record<string, unknown> | null;
+  status: string;
+  latency_ms: number;
+  created_at: string;
+}
+
+export interface OrgMember {
+  user_id: string;
+  email: string;
+  display_name: string;
+  role: string;
+  joined_at: string;
+}
+
+export interface Passage {
+  document_id: string;
+  filename: string;
+  chunk_index: number;
+  content: string;
+  score: number;
+}
+
+export interface AskResult {
+  answer: string;
+  citations: Passage[];
+  tier: string;
+  route_reason: string;
+}

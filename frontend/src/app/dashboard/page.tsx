@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
   ApiError,
+  createOrganization,
+  createWorkspace,
   fetchMe,
   listOrganizations,
   listWorkspaces,
@@ -51,6 +53,33 @@ export default function DashboardPage() {
     }
     void load();
   }, [router]);
+
+  async function reload() {
+    const myOrgs = await listOrganizations();
+    setOrgs(await Promise.all(myOrgs.map(async (org) => ({ org, workspaces: await listWorkspaces(org.id) }))));
+  }
+
+  async function addOrg() {
+    const name = prompt("Organization name");
+    if (!name?.trim()) return;
+    try {
+      await createOrganization(name.trim());
+      await reload();
+    } catch (err) {
+      alert(err instanceof ApiError ? err.message : "Could not create organization");
+    }
+  }
+
+  async function addWorkspace(orgId: string) {
+    const name = prompt("Workspace name");
+    if (!name?.trim()) return;
+    try {
+      await createWorkspace(orgId, name.trim());
+      await reload();
+    } catch (err) {
+      alert(err instanceof ApiError ? err.message : "Could not create workspace");
+    }
+  }
 
   function handleLogout() {
     clearToken();
@@ -101,6 +130,10 @@ export default function DashboardPage() {
           </EmptyState>
         )}
 
+        {!loading && (
+          <div className="mt-6"><button onClick={() => void addOrg()} className="btn-ghost text-[13px]">+ New organization</button></div>
+        )}
+
         <div className="mt-10 grid gap-10">
           {orgs.map(({ org, workspaces }, oi) => (
             <section key={org.id} className="rise" style={{ "--d": `${120 + oi * 80}ms` } as React.CSSProperties}>
@@ -114,11 +147,16 @@ export default function DashboardPage() {
                     <p className="font-mono text-[11px] text-muted">{workspaces.length} workspace{workspaces.length === 1 ? "" : "s"}</p>
                   </div>
                 </div>
-                {org.role && (
-                  <span className="rounded-full border border-line-strong px-2.5 py-0.5 font-mono text-[10.5px] uppercase tracking-[0.12em] text-muted">
-                    {org.role}
-                  </span>
-                )}
+                <div className="flex items-center gap-2">
+                  {(org.role === "owner" || org.role === "admin") && (
+                    <button onClick={() => void addWorkspace(org.id)} className="btn-ghost !px-3 !py-1 text-[12px]">+ Workspace</button>
+                  )}
+                  {org.role && (
+                    <span className="rounded-full border border-line-strong px-2.5 py-0.5 font-mono text-[10.5px] uppercase tracking-[0.12em] text-muted">
+                      {org.role}
+                    </span>
+                  )}
+                </div>
               </div>
 
               <ul className="mt-5 grid gap-4 sm:grid-cols-2">

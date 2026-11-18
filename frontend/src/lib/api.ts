@@ -8,7 +8,17 @@
 
 import { clearToken, getToken } from "@/lib/auth";
 import type {
+  Agent,
+  AgentInput,
+  AgentRunResult,
   AgentSummary,
+  AskResult,
+  CoordinatorResult,
+  McpServer,
+  McpTool,
+  McpToolCall,
+  OrgMember,
+  Passage,
   Approval,
   AuditLog,
   ChatMessage,
@@ -284,4 +294,103 @@ export function listAuditLogs(
   params.set("limit", String(opts.limit ?? 50));
   params.set("offset", String(opts.offset ?? 0));
   return apiFetch<AuditLog[]>(`/workspaces/${workspaceId}/audit-logs?${params}`);
+}
+
+// ---- Agents and coordinator ----
+
+const ws = (id: string) => `/workspaces/${id}`;
+const json = (method: string, body: unknown): RequestInit => ({ method, body: JSON.stringify(body) });
+
+export function listAgentsFull(workspaceId: string): Promise<Agent[]> {
+  return apiFetch<Agent[]>(`${ws(workspaceId)}/agents`);
+}
+export function createAgent(workspaceId: string, payload: AgentInput): Promise<Agent> {
+  return apiFetch<Agent>(`${ws(workspaceId)}/agents`, json("POST", payload));
+}
+export function updateAgent(workspaceId: string, id: string, payload: Partial<AgentInput>): Promise<Agent> {
+  return apiFetch<Agent>(`${ws(workspaceId)}/agents/${id}`, json("PATCH", payload));
+}
+export function deleteAgent(workspaceId: string, id: string): Promise<void> {
+  return apiFetch<void>(`${ws(workspaceId)}/agents/${id}`, { method: "DELETE" });
+}
+export function runAgent(workspaceId: string, id: string, input: string): Promise<AgentRunResult> {
+  return apiFetch<AgentRunResult>(`${ws(workspaceId)}/agents/${id}/run`, json("POST", { input }));
+}
+export function runCoordinator(workspaceId: string, goal: string): Promise<CoordinatorResult> {
+  return apiFetch<CoordinatorResult>(`${ws(workspaceId)}/coordinator/run`, json("POST", { goal }));
+}
+
+// ---- MCP servers, tools, tool calls ----
+
+export function listMcpServers(workspaceId: string): Promise<McpServer[]> {
+  return apiFetch<McpServer[]>(`${ws(workspaceId)}/mcp/servers`);
+}
+export function createMcpServer(
+  workspaceId: string,
+  payload: {
+    name: string;
+    transport: "stdio" | "http";
+    command?: string;
+    args?: string[];
+    url?: string;
+    credentials?: Record<string, unknown>;
+  },
+): Promise<McpServer> {
+  return apiFetch<McpServer>(`${ws(workspaceId)}/mcp/servers`, json("POST", payload));
+}
+export function deleteMcpServer(workspaceId: string, id: string): Promise<void> {
+  return apiFetch<void>(`${ws(workspaceId)}/mcp/servers/${id}`, { method: "DELETE" });
+}
+export function discoverMcpServer(
+  workspaceId: string,
+  id: string,
+): Promise<{ server_id: string; status: string; tools: McpTool[] }> {
+  return apiFetch(`${ws(workspaceId)}/mcp/servers/${id}/discover`, { method: "POST" });
+}
+export function listMcpToolsFull(workspaceId: string, serverId?: string): Promise<McpTool[]> {
+  const q = serverId ? `?server_id=${serverId}` : "";
+  return apiFetch<McpTool[]>(`${ws(workspaceId)}/mcp/tools${q}`);
+}
+export function patchMcpTool(
+  workspaceId: string,
+  id: string,
+  payload: { approved?: boolean; requires_approval?: boolean },
+): Promise<McpTool> {
+  return apiFetch<McpTool>(`${ws(workspaceId)}/mcp/tools/${id}`, json("PATCH", payload));
+}
+export function listToolCalls(workspaceId: string, limit = 50): Promise<McpToolCall[]> {
+  return apiFetch<McpToolCall[]>(`${ws(workspaceId)}/mcp/tool-calls?limit=${limit}`);
+}
+
+// ---- Knowledge search / ask ----
+
+export function searchKnowledge(workspaceId: string, query: string, topK = 6): Promise<{ query: string; passages: Passage[] }> {
+  return apiFetch(`${ws(workspaceId)}/knowledge/search`, json("POST", { query, top_k: topK }));
+}
+export function askKnowledge(workspaceId: string, question: string): Promise<AskResult> {
+  return apiFetch<AskResult>(`${ws(workspaceId)}/knowledge/ask`, json("POST", { question }));
+}
+
+// ---- Organizations, members, workspaces ----
+
+export function createOrganization(name: string): Promise<Organization> {
+  return apiFetch<Organization>("/organizations", json("POST", { name }));
+}
+export function listMembers(orgId: string): Promise<OrgMember[]> {
+  return apiFetch<OrgMember[]>(`/organizations/${orgId}/members`);
+}
+export function addMember(orgId: string, email: string, role: string): Promise<OrgMember> {
+  return apiFetch<OrgMember>(`/organizations/${orgId}/members`, json("POST", { email, role }));
+}
+export function createWorkspace(orgId: string, name: string): Promise<Workspace> {
+  return apiFetch<Workspace>(`/organizations/${orgId}/workspaces`, json("POST", { name }));
+}
+export function renameWorkspace(workspaceId: string, name: string): Promise<Workspace> {
+  return apiFetch<Workspace>(`/workspaces/${workspaceId}/rename`, json("POST", { name }));
+}
+export function deleteWorkspace(workspaceId: string): Promise<void> {
+  return apiFetch<void>(`/workspaces/${workspaceId}`, { method: "DELETE" });
+}
+export function deleteWorkflow(workspaceId: string, workflowId: string): Promise<void> {
+  return apiFetch<void>(`${ws(workspaceId)}/workflows/${workflowId}`, { method: "DELETE" });
 }

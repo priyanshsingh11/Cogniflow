@@ -11,11 +11,15 @@ import type { Workspace } from "@/types";
 const NAV: { href: string; label: string; adminOnly?: boolean }[] = [
   { href: "documents", label: "Documents" },
   { href: "chat", label: "Chat" },
+  { href: "knowledge", label: "Knowledge" },
+  { href: "agents", label: "Agents" },
+  { href: "mcp", label: "MCP tools" },
   { href: "workflows", label: "Workflows" },
   { href: "runs", label: "Runs" },
   { href: "approvals", label: "Approvals" },
   { href: "usage", label: "Usage" },
   { href: "audit", label: "Audit log", adminOnly: true },
+  { href: "settings", label: "Settings" },
 ];
 
 const ADMIN_ROLES = ["owner", "admin"];
