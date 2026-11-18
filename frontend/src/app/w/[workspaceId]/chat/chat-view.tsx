@@ -9,27 +9,50 @@ import {
   listMessages,
   sendMessage,
 } from "@/lib/api";
+import { ErrorNote, Icon } from "@/components/page-header";
 import type { ChatMessage, Conversation, Passage } from "@/types";
+
+const SUGGESTIONS = [
+  "Summarize the key points of my documents",
+  "What are the main risks mentioned?",
+  "List any deadlines or dates",
+];
+
+/** Turn "[1]" markers in an answer into small signal chips. */
+function withCitationChips(text: string) {
+  return text.split(/(\[\d+\])/g).map((part, i) =>
+    /^\[\d+\]$/.test(part) ? (
+      <sup key={i} className="mx-0.5 rounded bg-signal-soft px-1 font-mono text-[10px] text-signal">
+        {part.slice(1, -1)}
+      </sup>
+    ) : (
+      part
+    ),
+  );
+}
 
 function CitationList({ citations }: { citations: Passage[] }) {
   const [open, setOpen] = useState<number | null>(null);
   if (citations.length === 0) return null;
   return (
-    <div className="mt-3 border-t border-zinc-200 pt-2 dark:border-zinc-700">
-      <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-        Sources
-      </p>
-      <ul className="mt-1 grid gap-1">
+    <div className="mt-3 border-t border-line pt-3">
+      <p className="eyebrow !text-[10px]">Sources</p>
+      <ul className="mt-2 grid gap-1.5">
         {citations.map((c, i) => (
-          <li key={`${c.document_id}-${c.chunk_index}`} className="text-xs">
+          <li key={`${c.document_id}-${c.chunk_index}`}>
             <button
               onClick={() => setOpen(open === i ? null : i)}
-              className="text-left text-zinc-700 underline-offset-2 hover:underline dark:text-zinc-300"
+              aria-expanded={open === i}
+              className="flex w-full items-center gap-2 rounded-lg border border-line bg-paper px-2.5 py-1.5 text-left text-[12px] transition-colors hover:border-line-strong"
             >
-              [{i + 1}] {c.filename} · passage {c.chunk_index + 1} · {Math.round(c.score * 100)}%
+              <span className="font-mono text-[11px] text-signal">[{i + 1}]</span>
+              <span className="min-w-0 flex-1 truncate text-ink-2">
+                {c.filename} · passage {c.chunk_index + 1}
+              </span>
+              <span className="font-mono text-[10.5px] text-muted">{Math.round(c.score * 100)}%</span>
             </button>
             {open === i && (
-              <p className="mt-1 whitespace-pre-wrap rounded bg-zinc-100 p-2 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+              <p className="step-in mt-1 whitespace-pre-wrap rounded-lg border-l-2 border-signal bg-paper-2/60 p-3 text-[12.5px] leading-5 text-ink-2">
                 {c.content}
               </p>
             )}
@@ -42,21 +65,20 @@ function CitationList({ citations }: { citations: Passage[] }) {
 
 function MessageBubble({ message }: { message: ChatMessage }) {
   const isUser = message.role === "user";
+  const text = message.content ?? "(this message could not be recovered)";
   return (
-    <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
+    <div className={`step-in flex ${isUser ? "justify-end" : "justify-start"}`}>
       <div
-        className={`max-w-[85%] rounded-lg px-4 py-2.5 text-sm ${
+        className={`max-w-[88%] px-4 py-3 text-[14px] leading-6 ${
           isUser
-            ? "bg-black text-white dark:bg-zinc-50 dark:text-black"
-            : "border border-zinc-200 bg-white text-zinc-900 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100"
+            ? "rounded-2xl rounded-br-md bg-ink text-paper"
+            : "rounded-2xl rounded-bl-md border border-line-strong bg-card text-ink"
         }`}
       >
-        <p className="whitespace-pre-wrap">
-          {message.content ?? "(this message could not be recovered)"}
-        </p>
+        <p className="whitespace-pre-wrap">{isUser ? text : withCitationChips(text)}</p>
         {!isUser && <CitationList citations={message.citations} />}
         {!isUser && message.meta?.tier && (
-          <p className="mt-2 text-xs text-zinc-400">answered by {message.meta.tier} tier</p>
+          <p className="mt-2 font-mono text-[10.5px] text-muted">answered by {message.meta.tier} tier</p>
         )}
       </div>
     </div>
@@ -152,25 +174,24 @@ export function ChatView() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-1 gap-6">
-      <aside className="hidden w-52 shrink-0 flex-col gap-2 md:flex">
-        <button
-          onClick={() => void newConversation()}
-          className="rounded-md bg-black px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-zinc-50 dark:text-black dark:hover:bg-zinc-200"
-        >
+    <div className="mx-auto flex w-full max-w-5xl flex-1 gap-6 md:h-[calc(100vh-4rem)]">
+      <aside className="hidden w-56 shrink-0 flex-col gap-3 md:flex">
+        <button onClick={() => void newConversation()} className="btn-primary justify-center">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true"><path d="M7 2v10M2 7h10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /></svg>
           New chat
         </button>
-        <ul className="grid grid-cols-[minmax(0,1fr)] gap-1">
+        <p className="eyebrow !text-[10px] px-1">Conversations</p>
+        <ul className="-mt-1 grid min-h-0 grid-cols-[minmax(0,1fr)] content-start gap-1 overflow-y-auto">
+          {conversations.length === 0 && <li className="px-1 text-[12.5px] text-muted">None yet.</li>}
           {conversations.map((c) => (
             <li key={c.id}>
               <button
                 onClick={() => setActiveId(c.id)}
-                className={`w-full truncate rounded-md px-3 py-1.5 text-left text-sm ${
-                  c.id === activeId
-                    ? "bg-zinc-200 font-medium text-black dark:bg-zinc-800 dark:text-zinc-50"
-                    : "text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-900"
+                className={`relative w-full truncate rounded-lg px-3 py-2 text-left text-[13px] transition-colors ${
+                  c.id === activeId ? "bg-card font-medium text-ink ring-1 ring-line-strong" : "text-ink-2 hover:bg-paper-2"
                 }`}
               >
+                {c.id === activeId && <span className="absolute left-0 top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-r bg-signal" />}
                 {c.title || "Untitled"}
               </button>
             </li>
@@ -178,49 +199,59 @@ export function ChatView() {
         </ul>
       </aside>
 
-      <section className="flex min-w-0 flex-1 flex-col">
-        <h1 className="text-2xl font-semibold tracking-tight text-black dark:text-zinc-50">
-          Chat
-        </h1>
-        <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-          Answers come from your uploaded documents and cite their sources.
-        </p>
+      <section className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <header className="rise border-b border-line pb-4">
+          <p className="eyebrow">Ask</p>
+          <h1 className="display mt-1.5 text-4xl leading-none">Chat with your <em>documents</em></h1>
+        </header>
 
-        <div className="mt-4 flex min-h-[20rem] flex-1 flex-col gap-3 overflow-y-auto">
+        <div className="flex min-h-[20rem] flex-1 flex-col gap-4 overflow-y-auto py-5">
           {shownMessages.length === 0 && (
-            <p className="m-auto text-sm text-zinc-500 dark:text-zinc-400">
-              Ask a question about your documents.
-            </p>
+            <div className="m-auto max-w-md text-center">
+              <div className="float-y mx-auto grid h-14 w-14 place-items-center rounded-2xl border border-line-strong bg-paper text-signal">
+                <Icon name="chat" />
+              </div>
+              <p className="display mt-5 text-3xl leading-tight">Ask anything, get <em>cited</em> answers</p>
+              <p className="mt-2 text-[13.5px] leading-6 text-muted">Answers come only from your uploaded documents.</p>
+              <div className="mt-5 flex flex-wrap justify-center gap-2">
+                {SUGGESTIONS.map((q) => (
+                  <button key={q} onClick={() => setDraft(q)} className="rounded-full border border-line-strong bg-card px-3.5 py-1.5 text-[12.5px] text-ink-2 transition-colors hover:border-signal hover:text-signal">
+                    {q}
+                  </button>
+                ))}
+              </div>
+            </div>
           )}
           {shownMessages.map((m) => (
             <MessageBubble key={m.id} message={m} />
           ))}
           {sending && (
-            <p className="text-sm text-zinc-500 dark:text-zinc-400">Thinking…</p>
+            <div className="flex items-center gap-1.5 px-2" aria-label="Thinking">
+              {[0, 1, 2].map((i) => (
+                <span key={i} className="typing-dot h-1.5 w-1.5 rounded-full bg-signal" style={{ animationDelay: `${i * 160}ms` }} />
+              ))}
+            </div>
           )}
           <div ref={bottomRef} />
         </div>
 
-        {error && (
-          <p role="alert" className="mt-3 text-sm text-red-600 dark:text-red-400">
-            {error}
-          </p>
-        )}
+        {error && <ErrorNote>{error}</ErrorNote>}
 
-        <form onSubmit={onSend} className="mt-3 flex gap-2">
+        <form onSubmit={onSend} className="mt-3 flex items-center gap-2 rounded-2xl border border-line-strong bg-card p-1.5 pl-4 transition-shadow focus-within:border-signal focus-within:shadow-[0_0_0_3px_color-mix(in_srgb,var(--signal)_20%,transparent)]">
           <input
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             placeholder="Ask about your documents…"
             maxLength={20000}
-            className="min-w-0 flex-1 rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-black outline-none focus:border-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+            className="min-w-0 flex-1 bg-transparent py-2 text-[14px] text-ink outline-none placeholder:text-muted"
           />
           <button
             type="submit"
             disabled={sending || !draft.trim()}
-            className="rounded-md bg-black px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-50 dark:bg-zinc-50 dark:text-black dark:hover:bg-zinc-200"
+            aria-label="Send"
+            className="grid h-9 w-9 place-items-center rounded-xl bg-ink text-paper transition-colors hover:bg-signal hover:text-signal-ink disabled:opacity-40 disabled:hover:bg-ink disabled:hover:text-paper"
           >
-            Send
+            <svg width="15" height="15" viewBox="0 0 14 14" fill="none" aria-hidden="true"><path d="M7 12V2.5M3 6l4-4 4 4" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" /></svg>
           </button>
         </form>
       </section>

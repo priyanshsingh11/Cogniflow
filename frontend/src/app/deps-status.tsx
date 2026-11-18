@@ -18,19 +18,24 @@ export default function DepsStatus() {
       .catch((err: Error) => setResult({ state: "error", message: err.message }));
   }, []);
 
+  const dot = (ok: boolean) => (
+    <span className={`inline-block h-1.5 w-1.5 rounded-full ${ok ? "bg-ok" : "bg-fail"}`} />
+  );
+
   return (
-    <section className="mt-6 rounded-md border border-zinc-200 bg-white px-4 py-3 text-sm dark:border-zinc-800 dark:bg-zinc-900">
-      <h2 className="font-medium text-zinc-900 dark:text-zinc-50">Backend status</h2>
-      {result.state === "loading" && <p className="mt-2 text-zinc-500">Checking…</p>}
+    <section aria-label="Backend status" className="rounded-xl border border-line-strong bg-card px-4 py-3 font-mono text-[12px]">
+      <p className="mb-2 text-[10px] uppercase tracking-[0.14em] text-muted">Live backend status</p>
+      {result.state === "loading" && <p className="text-muted">Checking…</p>}
       {result.state === "error" && (
-        <p className="mt-2 text-red-600 dark:text-red-400">Unreachable: {result.message}</p>
+        <p className="flex items-center gap-2 text-fail">{dot(false)} Unreachable</p>
       )}
       {result.state === "done" && (
-        <ul className="mt-2 space-y-1">
+        <ul className="flex flex-wrap gap-x-5 gap-y-1.5">
           {Object.entries(result.deps).map(([name, status]) => (
-            <li key={name} className="flex justify-between text-zinc-700 dark:text-zinc-300">
-              <span>{name}</span>
-              <span className={status === "ok" ? "text-green-600" : "text-red-600"}>{status}</span>
+            <li key={name} className="flex items-center gap-2 text-ink-2">
+              {dot(status === "ok")}
+              {name}
+              <span className={status === "ok" ? "text-ok" : "text-fail"}>{status}</span>
             </li>
           ))}
         </ul>

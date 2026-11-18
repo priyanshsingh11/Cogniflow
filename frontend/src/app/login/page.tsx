@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ApiError, login } from "@/lib/api";
 import { setStoredUser, setToken } from "@/lib/auth";
+import { AuthShell, inputCls } from "@/components/auth-shell";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -32,50 +33,29 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex flex-1 flex-col items-center justify-center bg-zinc-50 px-6 py-24 dark:bg-black">
-      <main className="w-full max-w-sm">
-        <h1 className="text-2xl font-semibold tracking-tight text-black dark:text-zinc-50">
-          Sign in to Cogniflow
-        </h1>
-        <form onSubmit={handleSubmit} className="mt-6 grid gap-4">
-          <label className="grid gap-1.5 text-sm font-medium text-zinc-700 dark:text-zinc-300">
-            Email
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-black focus:outline-none focus:ring-2 focus:ring-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
-            />
-          </label>
-          <label className="grid gap-1.5 text-sm font-medium text-zinc-700 dark:text-zinc-300">
-            Password
-            <input
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-black focus:outline-none focus:ring-2 focus:ring-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
-            />
-          </label>
-          {error && (
-            <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
-          )}
-          <button
-            type="submit"
-            disabled={submitting}
-            className="rounded-md bg-black px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-50 dark:bg-zinc-50 dark:text-black dark:hover:bg-zinc-200"
-          >
-            {submitting ? "Signing in…" : "Sign in"}
-          </button>
-        </form>
-        <p className="mt-4 text-sm text-zinc-500 dark:text-zinc-400">
-          No account yet?{" "}
-          <Link href="/signup" className="underline hover:text-zinc-700 dark:hover:text-zinc-200">
-            Create one
-          </Link>
-        </p>
-      </main>
-    </div>
+    <AuthShell>
+      <p className="eyebrow">Welcome back</p>
+      <h1 className="display mt-2 text-5xl leading-none">Sign in</h1>
+      <form onSubmit={handleSubmit} className="mt-8 grid gap-4">
+        <label className="grid gap-1.5 text-[13px] font-medium text-ink-2">
+          Email
+          <input type="email" required autoComplete="email" placeholder="you@company.com" value={email} onChange={(e) => setEmail(e.target.value)} className={inputCls} />
+        </label>
+        <label className="grid gap-1.5 text-[13px] font-medium text-ink-2">
+          Password
+          <input type="password" required autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} className={inputCls} />
+        </label>
+        {error && (
+          <p role="alert" className="rounded-lg border border-fail/30 bg-fail-soft px-3 py-2 text-[13px] text-fail">{error}</p>
+        )}
+        <button type="submit" disabled={submitting} className="btn-primary mt-1 justify-center disabled:opacity-50">
+          {submitting ? "Signing in…" : "Sign in"}
+        </button>
+      </form>
+      <p className="mt-6 text-[13px] text-muted">
+        No account yet?{" "}
+        <Link href="/signup" className="font-medium text-ink underline decoration-signal decoration-2 underline-offset-4 hover:text-signal">Create one</Link>
+      </p>
+    </AuthShell>
   );
 }

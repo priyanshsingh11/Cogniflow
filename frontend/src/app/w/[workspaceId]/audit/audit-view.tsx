@@ -2,6 +2,7 @@
 
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { EmptyState, ErrorNote, Icon, PageHeader, SkeletonRows } from "@/components/page-header";
 import { ApiError, listAuditLogs } from "@/lib/api";
 import type { AuditLog } from "@/types";
 
@@ -31,15 +32,18 @@ export function AuditView() {
     };
   }, [workspaceId, filter, offset]);
 
+  const tone = (a: string) =>
+    /failed|deleted|rejected/.test(a) ? "text-fail" : /created|signup|login$|registered/.test(a) ? "text-ok" : "text-ink";
+
   return (
     <div className="mx-auto w-full max-w-4xl">
-      <h1 className="text-2xl font-semibold tracking-tight text-black dark:text-zinc-50">Audit log</h1>
-      <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-        Append-only record of changes in this workspace. Visible to admins.
-      </p>
+      <PageHeader eyebrow="Admin · append-only" title={<>Audit <em>log</em></>}>
+        A permanent record of sign-ins and every change in this workspace. Visible to admins.
+      </PageHeader>
 
       <form
-        className="mt-4 flex gap-2"
+        className="rise mt-6 flex gap-2"
+        style={{ "--d": "80ms" } as React.CSSProperties}
         onSubmit={(e) => {
           e.preventDefault();
           setOffset(0);
@@ -51,40 +55,42 @@ export function AuditView() {
           onChange={(e) => setAction(e.target.value)}
           placeholder="Exact action, e.g. workflow.updated"
           aria-label="Filter by action"
-          className="w-full max-w-xs rounded-md border border-zinc-300 bg-transparent px-3 py-1.5 text-sm dark:border-zinc-700"
+          className="w-full max-w-sm rounded-lg border border-line-strong bg-card px-3.5 py-2 font-mono text-[12.5px] text-ink outline-none placeholder:text-muted focus:border-signal"
         />
-        <button type="submit" className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700">
-          Filter
-        </button>
+        <button type="submit" className="btn-ghost !py-2">Filter</button>
+        {filter && (
+          <button type="button" onClick={() => { setAction(""); setFilter(""); setOffset(0); }} className="px-2 text-[13px] text-muted hover:text-ink">
+            Clear
+          </button>
+        )}
       </form>
 
-      {error && <p role="alert" className="mt-4 text-sm text-red-600 dark:text-red-400">{error}</p>}
-      {!rows && !error && <p className="mt-8 text-sm text-zinc-500 dark:text-zinc-400">Loading…</p>}
+      {error && <ErrorNote>{error}</ErrorNote>}
+      {!rows && !error && <SkeletonRows />}
       {rows && rows.length === 0 && (
-        <p className="mt-8 rounded-md border border-dashed border-zinc-300 p-8 text-center text-sm text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">
-          No events{filter ? ` for "${filter}"` : ""}.
-        </p>
+        <EmptyState icon={<Icon name="log" />} title={<>No <em>events</em></>}>
+          {filter ? `Nothing recorded for "${filter}".` : "Events will appear here as people use the workspace."}
+        </EmptyState>
       )}
 
       {rows && rows.length > 0 && (
-        <ul className="mt-4 grid gap-2">
-          {rows.map((r) => (
-            <li key={r.id} className="rounded-md border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-800">
+        <ul className="relative mt-6 grid gap-2 border-l border-line-strong pl-5">
+          {rows.map((r, i) => (
+            <li key={r.id} className="step-in relative rounded-xl border border-line-strong bg-card px-4 py-3" style={{ animationDelay: `${Math.min(i, 10) * 30}ms` }}>
+              <span className="absolute -left-[1.62rem] top-4 h-2 w-2 rounded-full border-2 border-paper bg-signal" aria-hidden="true" />
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="font-medium text-black dark:text-zinc-50">{r.action}</span>
-                <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                  {new Date(r.created_at).toLocaleString()}
-                </span>
+                <span className={`font-mono text-[13px] font-medium ${tone(r.action)}`}>{r.action}</span>
+                <span className="font-mono text-[11px] text-muted">{new Date(r.created_at).toLocaleString()}</span>
               </div>
-              <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+              <p className="mt-1 text-[12.5px] text-muted">
                 {r.actor_email ?? "system"}
                 {r.entity_type ? ` · ${r.entity_type}` : ""}
                 {r.entity_id ? ` ${r.entity_id.slice(0, 8)}` : ""}
               </p>
               {Object.keys(r.metadata).length > 0 && (
-                <details className="mt-1">
-                  <summary className="cursor-pointer text-xs text-zinc-500 dark:text-zinc-400">Details</summary>
-                  <pre className="mt-1 overflow-x-auto rounded bg-zinc-50 p-2 text-xs text-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
+                <details className="mt-1.5">
+                  <summary className="cursor-pointer font-mono text-[11px] text-muted hover:text-ink">details</summary>
+                  <pre className="mt-1.5 overflow-x-auto rounded-lg bg-paper-2 p-3 font-mono text-[11.5px] leading-5 text-ink-2">
                     {JSON.stringify(r.metadata, null, 2)}
                   </pre>
                 </details>
@@ -94,21 +100,9 @@ export function AuditView() {
         </ul>
       )}
 
-      <div className="mt-4 flex items-center gap-2">
-        <button
-          disabled={offset === 0}
-          onClick={() => setOffset(Math.max(0, offset - PAGE))}
-          className="rounded-md border border-zinc-300 px-3 py-1 text-sm disabled:opacity-40 dark:border-zinc-700"
-        >
-          Newer
-        </button>
-        <button
-          disabled={!rows || rows.length < PAGE}
-          onClick={() => setOffset(offset + PAGE)}
-          className="rounded-md border border-zinc-300 px-3 py-1 text-sm disabled:opacity-40 dark:border-zinc-700"
-        >
-          Older
-        </button>
+      <div className="mt-6 flex items-center gap-2">
+        <button disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - PAGE))} className="btn-ghost !py-1.5 disabled:opacity-40">← Newer</button>
+        <button disabled={!rows || rows.length < PAGE} onClick={() => setOffset(offset + PAGE)} className="btn-ghost !py-1.5 disabled:opacity-40">Older →</button>
       </div>
     </div>
   );

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { EmptyState, ErrorNote, Icon, PageHeader, SkeletonRows } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
 import { ApiError, decideApproval, listApprovals } from "@/lib/api";
 import type { Approval } from "@/types";
@@ -63,50 +64,69 @@ export function ApprovalsView() {
   const decided = approvals?.filter((a) => a.status !== "pending") ?? [];
 
   return (
-    <div className="mx-auto w-full max-w-3xl">
-      <h1 className="text-2xl font-semibold tracking-tight text-black dark:text-zinc-50">Approvals</h1>
-      <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+    <div className="mx-auto w-full max-w-4xl">
+      <PageHeader
+        eyebrow="Human in the loop"
+        title={<>Approval <em>inbox</em></>}
+        action={
+          pending.length > 0 ? (
+            <span className="inline-flex items-center gap-2 rounded-full border border-wait/40 bg-wait-soft px-3 py-1.5 font-mono text-[11px] text-wait">
+              <span className="pulse-dot h-1.5 w-1.5 rounded-full bg-wait text-wait" /> {pending.length} waiting
+            </span>
+          ) : undefined
+        }
+      >
         Runs pause here before sensitive steps. Approve to resume, reject to stop the run.
-      </p>
-      {error && <p role="alert" className="mt-4 text-sm text-red-600 dark:text-red-400">{error}</p>}
-      {approvals === null && !error && <p className="mt-8 text-sm text-zinc-500 dark:text-zinc-400">Loading…</p>}
+      </PageHeader>
+      {error && <ErrorNote>{error}</ErrorNote>}
+      {approvals === null && !error && <SkeletonRows n={2} />}
 
       {approvals && pending.length === 0 && (
-        <p className="mt-8 rounded-md border border-dashed border-zinc-300 p-8 text-center text-sm text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">
-          Nothing waiting for you.
-        </p>
+        <EmptyState icon={<Icon name="shield" />} title={<>All <em>clear</em></>}>
+          Nothing is waiting for a decision. Paused runs will appear here.
+        </EmptyState>
       )}
-      <ul className="mt-6 grid gap-3">
+      <ul className="mt-6 grid gap-4">
         {pending.map((a) => (
-          <li key={a.id} className="rounded-md border border-amber-300 bg-white p-4 dark:border-amber-800 dark:bg-zinc-900">
-            <p className="text-sm font-medium text-black dark:text-zinc-100">{a.description ?? "Approval requested"}</p>
-            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-              Requested {new Date(a.requested_at).toLocaleString()}
-              {a.workflow_run_id && (
-                <>
-                  {" · "}
-                  <Link href={`/w/${workspaceId}/runs/${a.workflow_run_id}`} className="underline">view run</Link>
-                </>
+          <li key={a.id} className="step-in relative overflow-hidden rounded-2xl border border-wait/50 bg-card p-5">
+            <span className="absolute inset-y-0 left-0 w-1 bg-wait" aria-hidden="true" />
+            <div className="flex flex-wrap items-start justify-between gap-3 pl-2">
+              <div className="min-w-0">
+                <p className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.12em] text-wait">
+                  <span className="pulse-dot h-2 w-2 rounded-full bg-wait text-wait" /> waiting approval
+                </p>
+                <p className="mt-2 text-[16px] font-medium tracking-tight text-ink">{a.description ?? "Approval requested"}</p>
+                <p className="mt-1 font-mono text-[11px] text-muted">
+                  Requested {new Date(a.requested_at).toLocaleString()}
+                  {a.workflow_run_id && (
+                    <>
+                      {" · "}
+                      <Link href={`/w/${workspaceId}/runs/${a.workflow_run_id}`} className="text-ink-2 underline decoration-signal underline-offset-4 hover:text-signal">view run</Link>
+                    </>
+                  )}
+                </p>
+              </div>
+            </div>
+            <div className="pl-2">
+              {hasDetails(a) && (
+                <pre className="mt-4 max-h-48 overflow-auto rounded-xl bg-paper-2 p-3 font-mono text-[11.5px] leading-5 text-ink-2">
+                  {JSON.stringify(a.details, null, 2)}
+                </pre>
               )}
-            </p>
-            {hasDetails(a) && (
-              <pre className="mt-3 max-h-48 overflow-auto rounded bg-zinc-100 p-2 text-xs text-zinc-800 dark:bg-zinc-950 dark:text-zinc-200">
-                {JSON.stringify(a.details, null, 2)}
-              </pre>
-            )}
-            <input
-              value={reasons[a.id] ?? ""}
-              onChange={(e) => setReasons((r) => ({ ...r, [a.id]: e.target.value }))}
-              placeholder="Reason (optional)"
-              className="mt-3 w-full rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm text-black outline-none focus:border-zinc-500 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
-            />
-            <div className="mt-3 flex gap-2">
-              <button onClick={() => void decide(a, "approve")} disabled={busy === a.id} className="rounded-md bg-emerald-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50">
-                Approve
-              </button>
-              <button onClick={() => void decide(a, "reject")} disabled={busy === a.id} className="rounded-md border border-red-300 px-4 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950">
-                Reject
-              </button>
+              <input
+                value={reasons[a.id] ?? ""}
+                onChange={(e) => setReasons((r) => ({ ...r, [a.id]: e.target.value }))}
+                placeholder="Reason (optional)"
+                className="mt-4 w-full rounded-lg border border-line-strong bg-paper px-3.5 py-2 text-[13.5px] text-ink outline-none transition-shadow placeholder:text-muted focus:border-signal focus:shadow-[0_0_0_3px_color-mix(in_srgb,var(--signal)_20%,transparent)]"
+              />
+              <div className="mt-3 flex gap-2">
+                <button onClick={() => void decide(a, "approve")} disabled={busy === a.id} className="rounded-lg bg-ok px-5 py-2 text-[13px] font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50">
+                  Approve &amp; resume
+                </button>
+                <button onClick={() => void decide(a, "reject")} disabled={busy === a.id} className="rounded-lg border border-fail/50 px-5 py-2 text-[13px] font-medium text-fail transition-colors hover:bg-fail-soft disabled:opacity-50">
+                  Reject
+                </button>
+              </div>
             </div>
           </li>
         ))}
@@ -114,13 +134,13 @@ export function ApprovalsView() {
 
       {decided.length > 0 && (
         <>
-          <h2 className="mt-10 text-sm font-semibold uppercase tracking-widest text-zinc-500 dark:text-zinc-400">History</h2>
+          <h2 className="eyebrow mt-12">History</h2>
           <ul className="mt-3 grid gap-2">
             {decided.map((a) => (
-              <li key={a.id} className="flex items-center justify-between gap-3 rounded-md border border-zinc-200 bg-white px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900">
+              <li key={a.id} className="flex items-center justify-between gap-3 rounded-xl border border-line-strong bg-card px-4 py-3">
                 <div className="min-w-0">
-                  <p className="truncate text-sm text-black dark:text-zinc-100">{a.description ?? "Approval"}</p>
-                  <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+                  <p className="truncate text-[14px] text-ink">{a.description ?? "Approval"}</p>
+                  <p className="mt-0.5 font-mono text-[11px] text-muted">
                     {a.decided_at ? new Date(a.decided_at).toLocaleString() : ""}
                     {a.reason ? ` · ${a.reason}` : ""}
                   </p>
