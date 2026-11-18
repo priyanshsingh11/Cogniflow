@@ -10,6 +10,7 @@ import { clearToken, getToken } from "@/lib/auth";
 import type {
   AgentSummary,
   Approval,
+  AuditLog,
   ChatMessage,
   ChatTurn,
   Conversation,
@@ -23,6 +24,7 @@ import type {
   Workflow,
   WorkflowRun,
   Workspace,
+  UsageReport,
 } from "@/types";
 
 const API_BASE_URL =
@@ -265,4 +267,21 @@ export function decideApproval(
     method: "POST",
     body: JSON.stringify({ action, reason: reason || null }),
   });
+}
+
+// ---- Usage and audit (phase 8) ----
+
+export function getUsage(workspaceId: string, days: number): Promise<UsageReport> {
+  return apiFetch<UsageReport>(`/workspaces/${workspaceId}/usage?days=${days}`);
+}
+
+export function listAuditLogs(
+  workspaceId: string,
+  opts: { action?: string; limit?: number; offset?: number } = {},
+): Promise<AuditLog[]> {
+  const params = new URLSearchParams();
+  if (opts.action) params.set("action", opts.action);
+  params.set("limit", String(opts.limit ?? 50));
+  params.set("offset", String(opts.offset ?? 0));
+  return apiFetch<AuditLog[]>(`/workspaces/${workspaceId}/audit-logs?${params}`);
 }

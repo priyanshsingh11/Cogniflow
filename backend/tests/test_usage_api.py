@@ -41,7 +41,7 @@ def _seed(workspace_id: uuid.UUID, agent_id: uuid.UUID | None = None) -> dict:
     async def go():
         engine = create_async_engine(TEST_DATABASE_URL)
         try:
-            async with async_sessionmaker(engine)() as s:
+            async with async_sessionmaker(engine, expire_on_commit=False)() as s:
                 call_a = uuid.uuid4()  # fallback: error then success
                 call_b = uuid.uuid4()  # success, single attempt
                 call_c = uuid.uuid4()  # failed: only attempts errored

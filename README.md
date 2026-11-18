@@ -42,11 +42,11 @@ It is **not a chatbot wrapper**. The goal is to demonstrate backend and system-d
 | **Workflows** | Versioned workflows of ordered steps (`llm`, `knowledge_search`, `mcp_tool`, `condition`, `agent`, `coordinator`, `approval`) with `{{...}}` templating between steps. Runs execute in a background **arq worker**; every run and step run is a Postgres row with status, input, output, error and timing |
 | **Reliability** | Per-step timeout and retries with backoff, idempotency keys (a repeated trigger returns the same run), step leases so two workers never execute one step, resume from the first unfinished step, and a reaper that recovers expired leases and runs whose enqueue was lost |
 | **Human approval** | An `approval` step (or an MCP tool flagged `requires_approval`) pauses the run as `waiting_approval` and creates an approval request; a member approves to resume or rejects to fail the run |
-| **Observability and safety** | Every model attempt is stored in `llm_calls` (tier, routing reason, tokens, latency, agent, `call_id` grouping the attempts of one call, `request_id`). Append-only **audit log** of sign-ins, member/workspace/workflow/run/MCP/approval changes; **usage dashboard API** (calls, tokens, cost, fallbacks, errors, slowest steps, daily series); Redis **API rate limits** (login, signup, LLM-costing routes, tool invokes, run triggers); `X-Request-ID` on every response; Prometheus-style `/metrics`; encrypted MCP server credentials and a stdio command allowlist. Backend only: no UI yet |
-| **Frontend** | Next.js app: landing page with live backend/DB health, signup, login, dashboard, and a workspace area with **Documents** (upload, live indexing status, delete), **Chat** (cited answers with expandable source passages, history), a **Workflow editor** (form-based step list: add, reorder, remove, per-type settings, retries/timeouts, saves as a new version; run with a JSON input), **Runs** (live status, per-step input/output/error/timing, cancel) and an **Approval inbox** (approve or reject paused runs) |
-| **Quality** | 200 automated tests (190 pass, 10 currently fail, see Testing) against a real Postgres (plus Mongo message tests), CI on GitHub Actions |
+| **Observability and safety** | Every model attempt is stored in `llm_calls` (tier, routing reason, tokens, latency, agent, `call_id` grouping the attempts of one call, `request_id`). Append-only **audit log** of sign-ins, member/workspace/workflow/run/MCP/approval changes; **usage dashboard API** (calls, tokens, cost, fallbacks, errors, slowest steps, daily series); Redis **API rate limits** (login, signup, LLM-costing routes, tool invokes, run triggers); `X-Request-ID` on every response; Prometheus-style `/metrics`; encrypted MCP server credentials and a stdio command allowlist. Usage and audit logs have frontend pages |
+| **Frontend** | Next.js app: landing page with live backend/DB health, signup, login, dashboard, and a workspace area with **Documents** (upload, live indexing status, delete), **Chat** (cited answers with expandable source passages, history), a **Workflow editor** (form-based step list: add, reorder, remove, per-type settings, retries/timeouts, saves as a new version; run with a JSON input), **Runs** (live status, per-step input/output/error/timing, cancel) an **Approval inbox** (approve or reject paused runs), a **Usage** page (calls, tokens, cost, fallback/failure rates, latency, per-tier/model/agent tables, slowest steps, recent errors; 24 h to 90 d) and an **Audit log** page (admin-only, action filter, paging) |
+| **Quality** | 200 automated tests passing against a real Postgres (plus 3 opt-in live tests) against a real Postgres (plus Mongo message tests), CI on GitHub Actions |
 
-**Planned (not built yet):** scheduled triggers, evaluation, usage/audit screens in the frontend, visual workflow editor, deployment. See [Roadmap](#roadmap).
+**Planned (not built yet):** scheduled triggers, evaluation, visual workflow editor, deployment. See [Roadmap](#roadmap).
 
 ---
 
@@ -367,7 +367,7 @@ Never commit `.env` files. They are git-ignored.
 docker compose up -d                      # tests need the Postgres container
 cd backend
 uv run ruff check .                       # lint
-uv run pytest                             # 200 tests (190 pass, 3 skipped live, 10 failing: see below)
+uv run pytest                             # 200 tests (+3 opt-in live tests, skipped by default)
 RUN_LIVE_LLM=1 uv run pytest tests/test_llm_live.py -s   # optional: real provider smoke test
 RUN_LIVE_EMBED=1 uv run pytest tests/test_embed_live.py  # optional: downloads the real embedding model
 cd ../frontend && npm run lint && npm run build
@@ -377,7 +377,6 @@ cd ../frontend && npm run lint && npm run build
 - **Deterministic LLM tests:** a scripted `FakeProvider` simulates rate limits, timeouts, bad output and failures, so routing, fallback, escalation, the tool loop and the coordinator are all tested without network or API keys. Embeddings come from a fake embedder in tests, so CI never downloads the model.
 - **What is covered:** auth, tenant isolation, role enforcement, gateway behaviours (fallback, retry, escalation, attempt cap, pins, local rate limiting), the tool loop (unknown tool, missing args, approval refusal, step limit), the coordinator, `llm_calls` recording, document parsing/chunking/upload rules, vector search, cited answers, agent `knowledge_search`, conversations, Mongo-backed history and the two-phase message recovery (reaper) paths.
 - **Phase 8 coverage:** audit rows, rate limits (login/signup/LLM/tool/runs, fail-open, disable switch), request IDs, usage aggregation and scoping.
-- **Known failing (10):** 4 in `test_rate_limits.py` (test helper `_signup` returns a dict where the tests expect a response object, plus a fake request without `.client.host`) and 6 in `test_usage_api.py` (`MissingGreenlet` from async SQLAlchemy). The CI backend job fails until fixed.
 - **CI:** GitHub Actions runs backend lint + tests (with a pgvector service) and frontend lint + build on every push and pull request.
 
 ---
@@ -428,7 +427,7 @@ cd ../frontend && npm run lint && npm run build
 | 5 | Workflow engine: workflow API, LangGraph executor on arq, retries, timeouts, idempotency, resume | ✅ Done (backend) |
 | 6 | Human approval: pause/resume runs | ✅ Done (backend) |
 | 7 | Frontend MVP: upload and chat, workflow editor, run history, approval inbox | ✅ Done |
-| 8 | Observability and safety: audit logs, rate limits, usage dashboard | ✅ Done (backend; 10 tests failing, no UI) |
+| 8 | Observability and safety: audit logs, rate limits, usage dashboard | ✅ Done |
 | 9 | Evaluation: datasets, cases, runs, scores | ⬜ |
 | 10 | Visual builder (React Flow), multi-agent extras, schedule/webhook triggers | ⬜ |
 | 11 | Deploy and polish: free PaaS + Neon + Atlas, CI/CD, demo | ⬜ |
@@ -447,7 +446,7 @@ MVP target = phases 0–7 (matches [OVERVIEW](OVERVIEW)).
 - MCP: one connection per request (no session pool). A `stdio` server runs a command **on the API host**, so registering one is admin-only and is not safe for untrusted admins; before deploying publicly, restrict allowed commands. Server credentials/env are not stored yet (no secret handling), so servers needing tokens (e.g. GitHub) are not usable until that is decided. Tools needing approval stay refused until Phase 6.
 - Document indexing and the workflow reaper run on the arq worker (the chat reaper also still runs in-process); without a worker running (or if Redis is down) enqueueing falls back to in-process execution.
 - Workflows: steps run sequentially (no parallel branches or loops), no schedule/webhook triggers yet, and no UI (phase 7). Retried steps with side effects (e.g. MCP calls) are re-executed.
-- Usage dashboard and audit log have API only (no frontend screens). `/metrics` counters are per process and the endpoint is unauthenticated.
+- `/metrics` counters are per process and the endpoint is unauthenticated.
 - Chunks are re-embedded with the stored model only — changing `EMBEDDING_MODEL` needs a re-upload (no version field yet).
 
 ---

@@ -7,6 +7,7 @@ per-subject isolation, and that a dead Redis never blocks traffic.
 """
 
 import time
+from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
@@ -15,6 +16,15 @@ from fastapi.testclient import TestClient
 import app.core.ratelimit as rl
 from app.config import settings
 from tests.test_tenancy import _first_org_and_workspace, _signup
+
+
+def _signup_raw(client: TestClient, email: str, name: str):
+    """Raw signup response (these tests assert on 201 vs 429)."""
+    return client.post(
+        "/auth/signup",
+        json={"email": email, "password": "password123", "display_name": name},
+    )
+
 
 BODY = {"messages": [{"role": "user", "content": "hello"}], "step_type": "classify"}
 
@@ -127,7 +137,7 @@ def test_client_ip_prefers_x_forwarded_for():
 
     class _Plain:
         headers: dict = {}
-        client = ("10.1.2.3", 1234)
+        client = SimpleNamespace(host="10.1.2.3", port=1234)
 
     assert rl.client_ip(_Plain()) == "10.1.2.3"
 
@@ -138,10 +148,10 @@ def test_client_ip_prefers_x_forwarded_for():
 def test_signup_rate_limited_per_ip(client: TestClient, fake_redis, monkeypatch):
     monkeypatch.setattr(settings, "rl_signup_ip_per_hour", 2)
 
-    assert _signup(client, "rl-1@test.dev", "One").status_code == 201
-    assert _signup(client, "rl-2@test.dev", "Two").status_code == 201
+    assert _signup_raw(client, "rl-1@test.dev", "One").status_code == 201
+    assert _signup_raw(client, "rl-2@test.dev", "Two").status_code == 201
 
-    third = _signup(client, "rl-3@test.dev", "Three")
+    third = _signup_raw(client, "rl-3@test.dev", "Three")
     assert third.status_code == 429
     assert int(third.headers["Retry-After"]) > 0
     assert third.headers["X-RateLimit-Limit"] == "2"
@@ -237,8 +247,8 @@ def test_api_fails_open_when_redis_is_down(client: TestClient, monkeypatch):
     monkeypatch.setattr(settings, "rl_signup_ip_per_hour", 1)
 
     # Limit is 1, Redis is dead: requests must still go through.
-    assert _signup(client, "rl-dead-1@test.dev", "One").status_code == 201
-    assert _signup(client, "rl-dead-2@test.dev", "Two").status_code == 201
+    assert _signup_raw(client, "rl-dead-1@test.dev", "One").status_code == 201
+    assert _signup_raw(client, "rl-dead-2@test.dev", "Two").status_code == 201
 
 
 def test_rate_limits_can_be_disabled_wholesale(client: TestClient, fake_redis, monkeypatch):
@@ -246,4 +256,4 @@ def test_rate_limits_can_be_disabled_wholesale(client: TestClient, fake_redis, m
     monkeypatch.setattr(settings, "rl_signup_ip_per_hour", 1)
 
     for i in range(3):
-        assert _signup(client, f"rl-off-{i}@test.dev", f"U{i}").status_code == 201
+        assert _signup_raw(client, f"rl-off-{i}@test.dev", f"U{i}").status_code == 201

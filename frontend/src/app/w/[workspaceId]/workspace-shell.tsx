@@ -7,13 +7,17 @@ import { ApiError, getWorkspace } from "@/lib/api";
 import { clearToken, getToken } from "@/lib/auth";
 import type { Workspace } from "@/types";
 
-const NAV = [
+const NAV: { href: string; label: string; adminOnly?: boolean }[] = [
   { href: "documents", label: "Documents" },
   { href: "chat", label: "Chat" },
   { href: "workflows", label: "Workflows" },
   { href: "runs", label: "Runs" },
   { href: "approvals", label: "Approvals" },
+  { href: "usage", label: "Usage" },
+  { href: "audit", label: "Audit log", adminOnly: true },
 ];
+
+const ADMIN_ROLES = ["owner", "admin"];
 
 export function WorkspaceShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -61,7 +65,9 @@ export function WorkspaceShell({ children }: { children: React.ReactNode }) {
           </span>
         )}
         <nav className="mt-5 flex gap-2 md:flex-col">
-          {NAV.map((item) => {
+          {NAV.filter(
+            (item) => !item.adminOnly || (workspace?.role && ADMIN_ROLES.includes(workspace.role)),
+          ).map((item) => {
             const href = `/w/${workspaceId}/${item.href}`;
             const active = pathname.startsWith(href);
             return (

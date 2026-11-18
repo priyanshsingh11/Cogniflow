@@ -188,3 +188,113 @@ export interface Approval {
   requested_at: string;
   decided_at: string | null;
 }
+
+// ---- Usage and audit (phase 8) ----
+
+export interface UsageTotals {
+  llm_calls: number;
+  llm_attempts: number;
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+  cost_usd: number;
+  failed_calls: number;
+  fallback_calls: number;
+  fallback_rate: number;
+  failure_rate: number;
+  avg_latency_ms: number;
+  p95_latency_ms: number;
+  tool_calls: number;
+  tool_call_errors: number;
+  runs: number;
+  runs_succeeded: number;
+  runs_failed: number;
+  run_success_rate: number;
+}
+
+export interface TierUsage {
+  tier: string;
+  calls: number;
+  attempts: number;
+  tokens: number;
+  errors: number;
+  avg_latency_ms: number;
+}
+
+export interface ModelUsage {
+  provider: string;
+  model: string;
+  attempts: number;
+  tokens: number;
+  errors: number;
+  avg_latency_ms: number;
+}
+
+export interface AgentUsage {
+  agent_id: string | null;
+  agent_name: string | null;
+  attempts: number;
+  tokens: number;
+  errors: number;
+}
+
+export interface DayUsage {
+  day: string;
+  calls: number;
+  attempts: number;
+  tokens: number;
+  errors: number;
+  avg_latency_ms: number;
+}
+
+export interface SlowStep {
+  step_run_id: string;
+  workflow_run_id: string;
+  workflow_name: string;
+  step_name: string;
+  status: string;
+  duration_ms: number;
+  finished_at: string | null;
+}
+
+export interface SlowWorkflow {
+  workflow_id: string;
+  workflow_name: string;
+  runs: number;
+  avg_duration_ms: number;
+  max_duration_ms: number;
+}
+
+export interface RecentError {
+  kind: string;
+  created_at: string;
+  message: string;
+  entity_id: string | null;
+  context: Record<string, unknown>;
+}
+
+export interface UsageReport {
+  days: number;
+  since: string;
+  totals: UsageTotals;
+  by_tier: TierUsage[];
+  by_model: ModelUsage[];
+  by_agent: AgentUsage[];
+  by_day: DayUsage[];
+  slowest_steps: SlowStep[];
+  slowest_workflows: SlowWorkflow[];
+  recent_errors: RecentError[];
+}
+
+export interface AuditLog {
+  id: string;
+  action: string;
+  actor_id: string | null;
+  actor_email: string | null;
+  workspace_id: string | null;
+  org_id: string | null;
+  entity_type: string | null;
+  entity_id: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+}
